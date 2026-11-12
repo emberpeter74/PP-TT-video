@@ -13,6 +13,18 @@ import sys
 from pp_tt_video.pipeline import process_videos
 
 
+def show_start(number, total, video):
+    """Tell the user which video is being worked on right now."""
+    # flush=True shows the line at once instead of waiting for more output.
+    print(f"[{number}/{total}] {video.name}: extracting GPS ...", flush=True)
+
+
+def show_done(number, total, result):
+    """Tell the user how the video went."""
+    status = "OK" if result.ok else "FAILED"
+    print(f"[{number}/{total}] {status}: {result.message} ({result.seconds:.0f} s)", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="pp_tt_video",
@@ -22,18 +34,23 @@ def main():
     parser.add_argument("--overwrite", action="store_true", help="replace GPX files that already exist")
     arguments = parser.parse_args()
 
-    results = process_videos(arguments.inputs, overwrite=arguments.overwrite)
+    results = process_videos(
+        arguments.inputs,
+        overwrite=arguments.overwrite,
+        on_start=show_start,
+        on_done=show_done,
+    )
 
     if not results:
         print("No video files found.")
         return 1
-    for result in results:
-        status = "OK    " if result.ok else "FAILED"
-        print(f"{status} {result.video.name}: {result.message}")
+
+    failed = [result for result in results if not result.ok]
+    print(f"Finished: {len(results) - len(failed)} of {len(results)} videos without errors.")
 
     # Exit code 0 means success; anything else tells the caller that
     # at least one video failed.
-    return 0 if all(result.ok for result in results) else 1
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
