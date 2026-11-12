@@ -14,3 +14,6 @@ executables/
 # The example folder is kept out until it is decided which example is published.
 # Remove this line to include its events file and GPX file.
 example video  and output file/
+
+# Files Python creates by itself when code runs.
+__pycache__/

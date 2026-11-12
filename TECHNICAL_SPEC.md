@@ -17,7 +17,7 @@ Tools on the PC:
 
 | Tool | Needed for | State |
 |---|---|---|
-| Python | The module itself | Installed according to the user, but not found on the command path: only the Microsoft Store placeholder answers to `python`. To be located. |
+| Python | The module itself | Two versions are installed with the Python install manager (`py`): 3.15.2 (the default) and 3.13.17. The project uses **3.13**, because the newest release is often not yet supported by video and detection libraries. Whether those libraries already support 3.15 is unverified. |
 | ExifTool | GPS extraction | Version 13.59, in the `executables` folder. Same version that produced the reference GPX file. |
 | ffmpeg, ffprobe | Reading and downscaling video, extracting sound, reading video properties | Build of 13 July 2024, in the `executables` folder. Supports Nvidia hardware decoding of H.265. |
 
@@ -201,7 +201,7 @@ Each step ends with something that can be run and checked, so the user can follo
 
 ## 14. Open technical questions
 
-1. Where is Python installed, and which version is it?
+1. Do the libraries we need (video reading, detection on the graphics card) already support Python 3.15? Until checked, the project stays on 3.13.
 2. Does the example file contain gyroscope and accelerometer data?
 3. May Python libraries be installed on this PC?
 4. How fast does the reduced video decode on this graphics card?
