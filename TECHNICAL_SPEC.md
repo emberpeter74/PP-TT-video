@@ -18,8 +18,20 @@ Tools on the PC:
 | Tool | Needed for | State |
 |---|---|---|
 | Python | The module itself | Installed according to the user, but not found on the command path: only the Microsoft Store placeholder answers to `python`. To be located. |
-| ExifTool | GPS extraction | Installed according to the user, but not found on the command path. To be located. |
-| ffmpeg | Reading and downscaling video, extracting sound | Not found. To be installed if the design below is accepted. |
+| ExifTool | GPS extraction | Version 13.59, in the `executables` folder. Same version that produced the reference GPX file. |
+| ffmpeg, ffprobe | Reading and downscaling video, extracting sound, reading video properties | Build of 13 July 2024, in the `executables` folder. Supports Nvidia hardware decoding of H.265. |
+
+### The `executables` folder
+
+ExifTool and ffmpeg need no installation on Windows, so they are kept in a folder `executables` inside the project:
+
+- `exiftool.exe` with its `exiftool_files` folder, and the GPX template `gpx.fmt`;
+- `ffmpeg.exe`, `ffprobe.exe` (and `ffplay.exe`, which the module does not use).
+
+Rules:
+
+- The module looks for its tools in this folder. The folder's location is a setting, not fixed in the logic.
+- The folder is **not in the Git repository**: the files are large (about 125 MB each for ffmpeg) and carry their own licences. The README tells others which tools to download and where to put them.
 
 ## 2. Language
 
@@ -64,7 +76,7 @@ Rules across all steps:
 
 - The module calls ExifTool with the same options the user has used by hand:
   `exiftool -a "-gps*" -p gpx.fmt -ee <video> > <name>.gpx`
-- `gpx.fmt` is ExifTool's GPX template file. Its location on the PC must be found, or a copy kept with the module.
+- `gpx.fmt` is ExifTool's GPX template file. A copy is kept in the `executables` folder next to ExifTool.
 - The output is written unchanged, as the business specification requires.
 - Check: the module's output for the example video must be identical to the reference GPX file.
 
@@ -175,7 +187,7 @@ Because it is public, anyone can read everything in it. Consequences:
 ## 13. Proposed order of work
 
 0. Create the Git repository with the two specification documents and the ignore rule for videos.
-1. Locate Python and ExifTool, install ffmpeg.
+1. Locate Python; check that ExifTool and ffmpeg run from the `executables` folder (done for the tools).
 2. GPS extraction, checked against the reference GPX file.
 3. Events file writer and the comparison tool.
 4. Check which sensor data the example file contains.
@@ -189,9 +201,8 @@ Each step ends with something that can be run and checked, so the user can follo
 
 ## 14. Open technical questions
 
-1. Where are Python and ExifTool installed, and which Python version is it?
-2. Where is ExifTool's `gpx.fmt` template on this PC?
-3. Does the example file contain gyroscope and accelerometer data?
-4. May ffmpeg and Python libraries be installed on this PC?
-5. How fast does the reduced video decode on this graphics card?
-6. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)
+1. Where is Python installed, and which version is it?
+2. Does the example file contain gyroscope and accelerometer data?
+3. May Python libraries be installed on this PC?
+4. How fast does the reduced video decode on this graphics card?
+5. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)
