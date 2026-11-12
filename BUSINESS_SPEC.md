@@ -77,6 +77,7 @@ States named by the user but not in the example:
 | `overtaken` | Another car passes the user's car |
 | `obstacle` | Anything on the road: debris, a stopped car, or any other object |
 | `held up` | A car ahead holds the user's car up: following it closely without passing |
+| `crash` | The user's car can no longer drive on at pace: a collision or a mechanical failure |
 
 ### Descriptions (confirmed by the user)
 
@@ -92,6 +93,7 @@ These are the description texts for each entry in the event type list. All are w
 | `overtaken` | Another car appears at the side of the picture coming from behind, passes me and moves ahead. Starts 3 seconds **before** the other car first appears, so the whole process is covered; ends when it is clearly ahead and has pulled away. |
 | `held up` | A car ahead of me holds me up: I follow it closely without passing, and it dictates my line and speed. |
 | `obstacle` | Something is on or beside the road that should not be there: debris, car parts, fluid, gravel thrown onto the tarmac, or a stopped car. Starts when it becomes visible; ends when I have passed it. |
+| `crash` | My car can no longer drive on at pace: it hits something, is hit by another car, or stops with a mechanical failure. Lasts until the end of the video unless the car drives on. (Draft, to be confirmed. Added from the third example, where the clutch failed.) |
 | `cooling` | From the moment the car stops driving at pace at the end of the session until the end of the video: slow final lap, entering the pit lane, parking. |
 | `other event` | Anything clearly unusual that fits none of the descriptions above. (Fixed label, not part of the list.) |
 

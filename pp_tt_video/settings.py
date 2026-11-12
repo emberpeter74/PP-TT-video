@@ -20,3 +20,17 @@ GPX_TEMPLATE = EXECUTABLES_FOLDER / "gpx.fmt"
 
 # File extensions that count as video files (compared in lower case).
 VIDEO_EXTENSIONS = {".mp4"}
+
+# The list of event types: one line per type, with a label and a description.
+# Adding a type means adding a line to this file. Later it becomes a database.
+EVENT_TYPES_FILE = PROJECT_FOLDER / "event_types.csv"
+
+# The label for "nothing is happening". It is the background, not an event.
+CLEAR_LABEL = "clear"
+
+# The label for something unusual that fits no type in the list.
+OTHER_EVENT_LABEL = "other event"
+
+# How far a detected time may be from the hand-marked time and still count
+# as correct, in seconds.
+TIME_TOLERANCE_SECONDS = 5
