@@ -162,7 +162,7 @@ Because it is public, anyone can read everything in it. Consequences:
 - Nothing private goes into the repository: no passwords or keys, no personal data, no absolute paths from this PC.
 - **One example is published** (decided by the user): its events file and GPX file are in the repository. Its video is not; the video is on the user's YouTube channel and the repository only gives the link to it.
 - All other examples and reference files stay on this PC and are excluded from the repository.
-- **Name:** `gopro-trackday-event-extractor` (proposed; lower case with hyphens, as is usual on GitHub).
+- **Name:** `PP-TT-video` (decided by the user, to match the name of another module of the larger program that is already on GitHub).
 - **Licence:** MIT (decided by the user).
 - **README** (content decided by the user):
   - the goal of the project;
@@ -194,5 +194,4 @@ Each step ends with something that can be run and checked, so the user can follo
 3. Does the example file contain gyroscope and accelerometer data?
 4. May ffmpeg and Python libraries be installed on this PC?
 5. How fast does the reduced video decode on this graphics card?
-6. Is the repository name `gopro-trackday-event-extractor` final?
-7. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)
+6. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)
