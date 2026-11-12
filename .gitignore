@@ -1,0 +1,12 @@
+# Files listed here are ignored by Git: they stay on this PC and are never
+# added to the repository.
+
+# Video files are far too large for Git (one example is 5.3 GB).
+*.mp4
+*.MP4
+*.mov
+*.MOV
+
+# The example folder is kept out until it is decided which example is published.
+# Remove this line to include its events file and GPX file.
+example video  and output file/
