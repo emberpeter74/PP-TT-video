@@ -13,18 +13,8 @@ stabilisation moves the whole view around, so position is unreliable; size
 is not affected by it.
 """
 
-from dataclasses import dataclass
-
 from pp_tt_video import settings
-
-
-@dataclass(frozen=True)
-class Stretch:
-    """A stretch of time with one label."""
-
-    start: float   # seconds since the beginning of the video
-    end: float
-    label: str
+from pp_tt_video.stretch import Stretch
 
 
 def smooth(values):

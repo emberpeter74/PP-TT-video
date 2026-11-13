@@ -1,6 +1,6 @@
 # Trackday footage analysis module: technical specification
 
-Status: first draft of the design. Everything here is a proposal until tested; nothing has been built. No code exists yet.
+Status: steps 0 to 6 and step 8 of the order of work (section 13) are built. Sections marked "as built" or "result of step" describe what exists; the rest is still a proposal.
 
 This document says **how** the module is built. **What** it must do is in `BUSINESS_SPEC.md`, which stays the authority: if the two disagree, the business specification wins.
 
@@ -259,9 +259,57 @@ Notes on these numbers:
 - **The extra `held up` in 10-32** is the car that has just overtaken: it stays close ahead for five seconds before pulling away.
 - Three videos are too few to call this accurate. The numbers show the method works in principle.
 
-**Not solved in this step: the pit lane.** Outside the part driven at pace the rules produce many wrong events: parked cars passed slowly in the paddock read as `overtaking`, cars driving past while standing still read as `overtaken` (in 12-17, after the breakdown). Over the three whole videos that is about 20 wrong events. They disappear once the module knows when the car is not driving at pace, which is step 8 (`warm up` and `cooling`). **Until then the events files are not usable outside the at-pace part.** It may be worth doing step 8 before step 7.
+**Not solved in this step: the pit lane.** Outside the part driven at pace the rules produce many wrong events: parked cars passed slowly in the paddock read as `overtaking`, cars driving past while standing still read as `overtaken` (in 12-17, after the breakdown). Over the three whole videos that is about 20 wrong events. **Solved in step 8:** car events during `warm up` and `cooling` are dropped (see "Warm up and cooling as built").
 
 **Tried and dropped: the door mirror.** The model does find the overtaking car in the door mirror seconds before it comes alongside, but the mirror is too small and moves too much in the stabilised picture for a reliable rule. The fixed 3-second lead before the car appears is used instead.
+
+### Reading the motion sensors (built in step 8)
+
+`sensors.py` runs ExifTool once per video with the print format `pp_tt_video/sensors.fmt` and gets, for every one-second block, about 200 accelerometer and 200 gyroscope measurements. This takes about 5 seconds per video, against minutes for the pictures.
+
+Which of the three numbers of a measurement means what was read from the examples and is kept in `settings.py`:
+
+| Sensor | Number | Meaning | How it was recognised |
+|---|---|---|---|
+| Accelerometer | 0 | Down | Reads about -9.8 m/s² when the car stands still: gravity |
+| Accelerometer | 1 | Sideways: cornering force | Up to 12 m/s² in corners, same sign as the turning |
+| Accelerometer | 2 | Along the car: plus when braking, minus when accelerating | Plus while the GPS speed falls |
+| Gyroscope | 0 | Turning left or right | Follows the cornering force |
+
+This holds for a camera standing upright and looking forward (assumption: all recordings are made this way). A camera mounted differently needs other values in the settings.
+
+Averaging the 200 measurements of a second removes the vibration of engine and road, which is several times larger than the forces of driving.
+
+### Warm up and cooling as built (result of step 8)
+
+**Speed does not work.** In the 10-32 example, where the GPS is good, the laps at pace run between 56 and 118 km/h and the cool-down lap between 52 and 90 km/h. The cornering force does not work either: the cool-down lap still has corners at 11 m/s².
+
+**Braking and accelerating does.** At pace the force along the car swings between about +5 (braking) and -4 m/s² (accelerating) every few seconds; on a slow lap it stays within about ±2.5. The rule in `pace.py`:
+
+1. Per second: the average force along the car, without its sign.
+2. "Effort": the average of that over 40 seconds around each second. At pace it is 1.5 to 2.7, on slow laps 0.4 to 1.3. The car is at pace where the effort is at least 1.3, for at least 20 seconds.
+3. The part at pace runs from the start of the first such stretch to the end of the last. Slow moments in between stay inside it.
+4. The 40-second average blurs the edges, so each edge is moved inward to the first or last second with a force of at least 3.0 m/s².
+5. An edge closer than 10 seconds to the start or end of the video means the video starts or ends at pace.
+6. Before the part is `warm up`, after it `cooling`. Car events that fall into either are dropped.
+
+All values are in `settings.py`.
+
+Result on the examples:
+
+| Example | Hand-made file | Module |
+|---|---|---|
+| 09-41 | `warm up` until 01:44, `cooling` from 11:20 | `warm up` until 01:39, `cooling` from 11:22 |
+| 10-32 | no `warm up`, `cooling` from 07:36 | no `warm up`, `cooling` from 07:35 |
+| 12-17 | no `warm up`, `crash` from 05:00 | no `warm up`, `cooling` from 05:02 |
+
+All within the tolerance of 5 seconds. The roughly 20 wrong car events in the pit lane and paddock are gone; the car events at pace are unchanged from step 6. In 12-17 the label is wrong (`cooling` instead of `crash`) because `crash` is not detected yet; the moment is right.
+
+Limits:
+
+- The values were set on three videos from one day, one car and one driver. Another car or a wet track may need other values.
+- The GPS speed is not used at all, so the rule behaves the same with and without a satellite fix.
+- A video without sensor data gets no `warm up` or `cooling`; the car rules then run over the whole video as before.
 
 ### Proposed method per event type
 
@@ -272,7 +320,7 @@ Notes on these numbers:
 | `held up` | **Built in step 6:** a tracked car stays close ahead for at least 3 seconds. | Medium: size alone does not always match the user's judgement |
 | `sliding` | Gyroscope and accelerometer together: the car turns faster than its cornering force and speed explain. Supported by tyre sound. A simple threshold on one signal is not enough (see step 4 result). | Medium; sensor data is confirmed, the method is not |
 | `offtrack` | Accelerometer: strong vibration typical of grass or gravel. Supported by the picture: the surface under the car is not tarmac. | Medium |
-| `warm up`, `cooling` | GPS speed where the camera has a fix; otherwise an estimate of pace from engine sound, vibration and picture motion. First and last sustained stretch at low pace. | Medium; the business specification accepts leaving these out |
+| `warm up`, `cooling` | **Built in step 8** (see above): how hard the car brakes and accelerates, from the accelerometer. Not from speed. | Good on the examples |
 | `obstacle` | Hardest. Objects on the road that are not moving cars: object detection for stopped cars, description-based recognition for debris. | Low; debris is small and rare |
 | `other event` | Compare each moment with normal clear driving in the same video and flag only strong deviations. | Low; conflicts with the false-alarm rule, so it starts very conservative |
 

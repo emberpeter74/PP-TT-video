@@ -122,7 +122,15 @@ Decided by the user:
 
 - Preferred: the module detects them itself, from the speed of the car.
 - This is a wish, not a hard requirement: if it proves not possible, the module may leave them out.
-- Note for the design phase: this module has no reliable speed data. The GoPro GPS is mostly invalid and RaceBox Mini data is out of scope, so speed would have to be estimated from the video or sound.
+- **Built (step 8):** the module detects both, but not from the speed. In the examples a cool-down lap is only about 10 km/h slower than a fast lap, so speed does not separate them. What does: at pace the driver brakes and accelerates hard, on a warm-up or cool-down lap gently. The module reads this from the camera's motion sensors, which work for the whole video without GPS. Details are in the technical specification.
+- `warm up` is only at the start of a video and `cooling` only at the end. A slow stretch in the middle of a session is neither.
+- A video that starts at pace has no `warm up`; one that ends at pace has no `cooling`.
+
+Assumptions made while building this, to be confirmed by the user:
+
+- **No car events during `warm up` and `cooling`.** `overtaking`, `overtaken` and `held up` are not reported there. In the pit lane and paddock, parked and passing cars would otherwise be reported as events, and the larger program ignores everything that is not `clear` anyway.
+- **A video in which the car never drives at pace is `warm up` from start to end.**
+- **After a breakdown the rest of the video is reported as `cooling`**, because `crash` is not detected yet. In the 12-17 example the module writes `cooling` from 05:02 where the hand-made file has `crash` from 05:00.
 
 Further candidates, not yet agreed: traffic ahead without a pass, flags or light panels, a slow car, pit lane, weather or surface change.
 
@@ -230,6 +238,7 @@ The format has no place for a confidence value or other extra fields.
 ## 10. Open questions
 
 1. Is the `crash` description right, or should a mechanical failure be its own event type?
-2. The 10-32 and 12-17 examples start with `clear`, not `warm up`. Did those recordings start at full pace?
+2. The 10-32 and 12-17 examples start with `clear`, not `warm up`. Did those recordings start at full pace? (The motion sensors say yes: in both, the car is already braking and accelerating hard in the first seconds. To be confirmed by the user.)
+3. Are the three assumptions about `warm up` and `cooling` in section 4 right?
 
 Settled: the two further examples promised by the user have been provided (see section 3).

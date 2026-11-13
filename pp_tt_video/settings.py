@@ -89,6 +89,45 @@ OVERTAKEN_LEAD_SECONDS = 3
 PASS_START_PART_OF_PEAK = 0.55
 PASS_END_PART_OF_PEAK = 0.5
 
+# --- Motion sensors -----------------------------------------------------------
+
+# Tells ExifTool which sensor values to print, and how (used by sensors.py).
+SENSOR_TEMPLATE = PROJECT_FOLDER / "pp_tt_video" / "sensors.fmt"
+
+# Every sensor measurement has three numbers, one per axis of the camera.
+# Which number means what depends on how the camera is mounted. These values
+# are for a camera standing upright and looking forward (number 0, 1 or 2).
+ACCELERATION_AXIS_DOWN = 0      # reads about -9.8 when standing still: gravity
+ACCELERATION_AXIS_SIDEWAYS = 1  # cornering force
+ACCELERATION_AXIS_FORWARD = 2   # plus when braking, minus when accelerating
+ROTATION_AXIS_TURNING = 0       # how fast the car turns left or right
+
+# --- Warm up and cooling: is the car driven at pace? ---------------------------
+#
+# All forces are in m/s². For comparison: 9.8 m/s² is the pull of gravity.
+
+# The braking and accelerating force is averaged over this many seconds.
+PACE_WINDOW_SECONDS = 40
+
+# The car is at pace while that average is at least this much. In the
+# examples it is 1.5 to 2.7 at pace and 0.4 to 1.3 on slow laps.
+PACE_MIN_EFFORT = 1.3
+
+# Driving at pace must last at least this long to count.
+PACE_MIN_SECONDS = 20
+
+# Braking or accelerating this hard marks the exact first and last moment
+# at pace.
+PACE_HARD_FORCE = 3.0
+
+# A warm up or cooling shorter than this is not reported: the video then
+# simply starts or ends at pace.
+PACE_MIN_EDGE_SECONDS = 10
+
+# The labels this step writes. They must be in the event type list.
+WARM_UP_LABEL = "warm up"
+COOLING_LABEL = "cooling"
+
 # File extensions that count as video files (compared in lower case).
 VIDEO_EXTENSIONS = {".mp4"}
 

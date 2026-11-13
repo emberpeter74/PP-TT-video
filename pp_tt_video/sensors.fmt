@@ -1,0 +1,14 @@
+#------------------------------------------------------------------------------
+# ExifTool print format for the motion sensor data in a GoPro video.
+# Used by sensors.py. ExifTool prints the three lines below once for every
+# block of sensor data in the file (the camera stores one block per second):
+#
+#   T|<start of the block in seconds>|<length of the block in seconds>
+#   A|<accelerometer values, three numbers per measurement>
+#   G|<gyroscope values, three numbers per measurement>
+#
+# A line is left out when the file has no such data.
+#------------------------------------------------------------------------------
+#[BODY]T|$SampleTime|$SampleDuration
+#[BODY]A|$Accelerometer
+#[BODY]G|$Gyroscope
