@@ -1,0 +1,12 @@
+# The Python libraries this project needs, with the versions it was built with.
+#
+# Install them into the virtual environment with:
+#   .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# The index below is PyTorch's own download server. It provides the builds
+# that can use an Nvidia graphics card ("cu134" = CUDA 13.4). A plain
+# "pip install torch" on Windows gives a build without graphics card support.
+--index-url https://download.pytorch.org/whl/cu134
+
+torch==2.15.0
+torchvision==0.29.2

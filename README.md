@@ -1,6 +1,6 @@
 # GoPro trackday event extractor
 
-Status: planning. The specifications are written; no code exists yet.
+Status: work in progress. GPS extraction works. Of the events, only those involving other cars (overtaking, overtaken, held up) are detected so far, and only reliably while the car is driving at pace on the track.
 
 ## Goal
 
@@ -37,6 +37,28 @@ Example of an events file:
 02:31 offtrack
 02:33 clear
 ```
+
+## Setup
+
+The project runs on Windows with Python 3.13 and an Nvidia graphics card.
+
+1. **External tools.** Create a folder `executables` in the project folder and copy into it:
+   - `exiftool.exe` with its `exiftool_files` folder, from [exiftool.org](https://exiftool.org) (rename `exiftool(-k).exe` to `exiftool.exe`);
+   - `gpx.fmt`, ExifTool's GPX template, from the `fmt_files` folder of the full ExifTool distribution;
+   - `ffmpeg.exe` and `ffprobe.exe`, from a build linked on [ffmpeg.org](https://ffmpeg.org/download.html) that supports Nvidia hardware decoding.
+2. **Python libraries.** Create a virtual environment and install the libraries into it:
+   ```
+   py -V:3.13 -m venv .venv
+   .venv\Scripts\python.exe -m pip install -r requirements.txt
+   ```
+
+## Use
+
+```
+.venv\Scripts\python.exe -m pp_tt_video "path\to\folder with videos"
+```
+
+For every video `name.mp4` this writes `name.gpx` and `name-events.txt` next to it. Files that already exist are left alone. Run the checks with `.venv\Scripts\python.exe -m unittest`.
 
 ## Documents
 

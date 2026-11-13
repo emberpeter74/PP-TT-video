@@ -1,6 +1,6 @@
 # Trackday footage analysis module: business specification
 
-Status: draft, updated from the example video and example output file. Open questions are in section 10.
+Status: draft, updated from the three example videos and their hand-made events files. Open questions are in section 10.
 
 This document says **what** the module must do. **How** it is built (language, tools, hardware, detection methods) is in `TECHNICAL_SPEC.md`.
 
@@ -25,7 +25,17 @@ GoPro MP4 footage recorded from inside the user's race car, processed offline af
 - The video's base name can be anything. `RaceBox Track Sessionon DD-MM-YYYY HH-MM` is only an example; the module must not depend on any naming pattern.
 - One file failing must not stop the rest of the set from being processed (assumption, to confirm).
 
-Reference input: `example video  and output file/RaceBox Track Sessionon 30-05-2026 09-41.MP4`
+**Examples provided by the user.** Three sessions from one trackday (30 May 2026), each a video with a hand-made events file and an extracted GPX file, in the folder `example video  and output file`:
+
+| Example | Length | Events it contains |
+|---|---|---|
+| 09-41 | 13:07 | warm up, sliding (4), offtrack (2), overtaking (2), cooling |
+| 10-32 | 10:25 | overtaken, overtaking (3), sliding (4), held up, cooling |
+| 12-17 | 6:27 | overtaken, overtaking (2), obstacle (3), sliding (2), held up, crash |
+
+Together they contain every agreed event type at least once. The counts are small, so they can show whether detection works in principle, not how accurate it is in general.
+
+Reference input, described in detail below: `example video  and output file/RaceBox Track Sessionon 30-05-2026 09-41.MP4`
 
 | Property | Value in the example |
 |---|---|
@@ -86,12 +96,12 @@ These are the description texts for each entry in the event type list. All are w
 | Label | Description |
 |---|---|
 | `warm up` | From the start of the video until the car first drives at full pace: standing in the paddock or pit lane, leaving the pits, and the slow first lap. |
-| `clear` | The car drives at pace on the track. No other car is close ahead or alongside, nothing lies on the road, and the car stays on the tarmac and under control. |
+| `clear` | The car drives at pace on the track. No other car is close ahead or alongside, nothing lies on the road, and the car stays on the tarmac and under control. A car further ahead that I am not catching does not change this. |
 | `offtrack` | My car leaves the tarmac with at least two wheels: grass, gravel or run-off area is under or directly ahead of the car, often with a shaking picture or dust. Ends when the car is back on the tarmac. |
 | `sliding` | My car loses grip but stays on the track: the view swings sideways more than the road bends, the steering is corrected quickly, tyres may squeal. Ends when the car drives straight and stable again. |
 | `overtaking` | A car ahead of me comes closer, I move alongside it and pass it, and it disappears from the picture behind me. Starts when I pull alongside; ends when the other car is out of view. |
 | `overtaken` | Another car appears at the side of the picture coming from behind, passes me and moves ahead. Starts 3 seconds **before** the other car first appears, so the whole process is covered; ends when it is clearly ahead and has pulled away. |
-| `held up` | A car ahead of me holds me up: I follow it closely without passing, and it dictates my line and speed. |
+| `held up` | A car ahead of me holds me up: I am close behind it, I am not falling back, and it dictates my line and speed. Ends when I start to overtake it, when it pulls away, or when it leaves the track ahead of me. |
 | `obstacle` | Something is on or beside the road that should not be there: debris, car parts, fluid, gravel thrown onto the tarmac, or a stopped car. Starts when it becomes visible; ends when I have passed it. |
 | `crash` | My car can no longer drive on at pace: it hits something, is hit by another car, or stops with a mechanical failure. Lasts until the end of the video unless the car drives on. (Draft, to be confirmed. Added from the third example, where the clutch failed.) |
 | `cooling` | From the moment the car stops driving at pace at the end of the session until the end of the video: slow final lap, entering the pit lane, parking. |
@@ -100,6 +110,10 @@ These are the description texts for each entry in the event type list. All are w
 Decided by the user:
 
 - Following another car closely without passing is not `clear`; it gets its own label, `held up`.
+- **Following a quicker car is `clear`.** If the car ahead is faster and the user cannot catch it, it does not hold the user up, even though it stays in view. What separates the two cases is distance: `held up` means being close behind a car that is not pulling away; a car that stays at a distance or gets further away leaves the track `clear`.
+- **`held up` can turn into `overtaking`.** The user often follows a slower car for a while and passes it when the situation allows. The events file then shows `held up` followed directly by `overtaking`, with no `clear` in between. The switch is at the moment the user pulls out to pass, which is where the description of `overtaking` starts. Both examples with `held up` show this pattern: about 13 and 36 seconds of `held up`, then 2 to 3 seconds of `overtaking`.
+- **`held up` needs at least 3 seconds.** Being close behind another car counts as `held up` only after 3 seconds; a shorter moment of closing in before an overtake is not marked. The value is fixed for now, but it must be easy to fine-tune later.
+- An overtake does not need a `held up` before it: catching and passing a car without being slowed is `clear` followed by `overtaking`.
 - `offtrack` counts from two wheels off the tarmac.
 - When two things happen at once, the labels are combined, for example `overtaken, sliding`. Any labels may be combined; the module assumes no combination is impossible.
 - `overtaken` starts 3 seconds before the other car appears. The value is fixed for now, but it must be easy to fine-tune later.
@@ -215,4 +229,7 @@ The format has no place for a confidence value or other extra fields.
 
 ## 10. Open questions
 
-1. Two more hand-labelled examples are promised; they are expected to contain `overtaken` and `obstacle`. `held up` is a new label with no example yet, so it cannot be checked until footage with it is labelled.
+1. Is the `crash` description right, or should a mechanical failure be its own event type?
+2. The 10-32 and 12-17 examples start with `clear`, not `warm up`. Did those recordings start at full pace?
+
+Settled: the two further examples promised by the user have been provided (see section 3).

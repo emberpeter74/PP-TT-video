@@ -21,6 +21,16 @@ Tools on the PC:
 | ExifTool | GPS extraction | Version 13.59, in the `executables` folder. Same version that produced the reference GPX file. |
 | ffmpeg, ffprobe | Reading and downscaling video, extracting sound, reading video properties | Build of 13 July 2024, in the `executables` folder. Supports Nvidia hardware decoding of H.265. |
 
+Python libraries, installed in a virtual environment `.venv` inside the project (not in Git) and listed in `requirements.txt`:
+
+| Library | Version | Needed for |
+|---|---|---|
+| PyTorch | 2.15.0, build for CUDA 13.4 | Running detection models on the graphics card |
+| torchvision | 0.29.2 | Ready-made, pre-trained detection models |
+| NumPy | 2.5.4 (installed with PyTorch) | Handling pictures as tables of numbers |
+
+All three are under BSD-style licences, compatible with this project's MIT licence. The project is run with the environment's Python: `.venv\Scripts\python.exe`.
+
 ### The `executables` folder
 
 ExifTool and ffmpeg need no installation on Windows, so they are kept in a folder `executables` inside the project:
@@ -117,7 +127,29 @@ The camera sits behind the driver in an open-top car and looks forward with a ve
 - A car 20 to 30 metres ahead is only about 60 pixels wide in the 1280-pixel picture.
 - Because the car is open, the areas beside it are visible to the left and right of the windscreen frame. That is where a car alongside appears.
 
-Consequence for step 6: shrinking the whole picture wastes most of the pixels on interior and sky. The analysis should instead cut out the region that shows the road and the sides before shrinking, so other cars keep enough detail. The region depends on the camera mount, so it must be a setting.
+Consequence for step 6: shrinking the whole picture wastes most of the pixels on interior and sky.
+
+### The view moves relative to the car (found at the start of step 6)
+
+Frames from the 12-17 example, a few seconds apart, show the cockpit in clearly different places in the picture: the windscreen frame tilts and shifts, and the driver's helmet is sometimes at the left edge, sometimes fills a third of the picture, sometimes is out of view. The camera's view is therefore not fixed to the car.
+
+**Cause: the camera's stabilisation (HyperSmooth) was switched on** (confirmed by the user). Stabilisation keeps the outside world steady in the picture. When the car turns, leans or bounces, the camera compensates by shifting and rotating the picture, so the cockpit appears to move instead. It also cuts away part of the picture's edge to have room for this.
+
+- The examples were recorded this way, so the module must cope with it.
+- **Mount:** the camera is fixed to the car's roll bar with GoPro's own mount (confirmed by the user), so it moves with the car.
+- The motion sensors are not affected by stabilisation: they record the raw movement of the camera body. With the rigid mount they therefore measure the car's movement, plus whatever vibration the mount adds.
+- Suggestion for future recordings (the user's decision): with stabilisation off and the camera fixed to the car, the cockpit stays in one place, the road region could be cut out and enlarged, and the picture is wider. The module must still handle recordings made with stabilisation on.
+
+Consequences:
+
+- **No fixed cut-out.** A fixed region of the picture cannot be assumed to show the road. The detector must either look at the whole picture or find the windscreen in each picture.
+- **Positions in the picture are unreliable.** "The other car moved from the centre to the left" may be the camera turning, not the car moving. The detector should rely on things that do not depend on where the camera points, mainly how the size of another car changes over time: a car that grows and then disappears was caught and passed; a car that appears large and then shrinks has passed us.
+- **The motion sensors may not measure the car.** If the camera moves relative to the car, its gyroscope and accelerometer record the camera's motion, not only the car's. This may be why the slide did not stand out in step 4, and it must be settled before step 7.
+
+What the known events look like:
+
+- `overtaken` (01:02 to 01:15): nothing is visible ahead until about 01:07; by 01:11 a car that has passed is close ahead on the right. Just before, it is visible only in the door mirror, a few pixels wide.
+- `overtaking` (02:00 to 02:09): a car is small in the distance at 01:59, close alongside on the left at 02:02, and gone at 02:05.
 
 ### Signals available in a GoPro file
 
@@ -156,13 +188,79 @@ So the GPS is poor only while the camera is still searching for satellites, whic
 
 First look at a known event: the slide at 04:53 in the 12-17 example does **not** stand out in simple per-second maximum values. Clear driving over kerbs produces equally large rotation and vibration. A plain threshold will therefore not work for `sliding`; the detector must compare signals, for example how fast the car turns against how hard it is cornering and how fast it is going. This is work for step 7.
 
+### First detection experiment (step 6)
+
+Two ready-made models from torchvision, both trained to find everyday objects including cars, were run on the two known events in the 12-17 example, on pictures reduced to 1280x720.
+
+| Model | Speed | Result |
+|---|---|---|
+| Faster R-CNN, MobileNet (small, fast) | 26 pictures per second | Finds the real cars, but also reports the cockpit as a "motorcycle" and the interior mirror as a "car" in most pictures. Too many false detections. |
+| Faster R-CNN, ResNet-50 v2 (larger, slower) | 10 pictures per second | Finds the real cars with a confidence of 0.95 to 1.00. False detections are rare and have low confidence. **Chosen.** |
+
+What the chosen model sees in the known events:
+
+- `overtaking` (reference 02:00 to 02:09): one car followed without a gap from 01:57 to 02:02. Its width in the picture goes 98, 73, 54, 72, 103, 146, 190 pixels, then it is gone. Growing and then gone: caught and passed.
+- `overtaken` (reference 01:02 to 01:15): from 01:02 to 01:03.5 a car is detected **inside the door mirror**, which is the car coming from behind. At 01:10 a car appears at the right edge 269 pixels wide and shrinks: 215, 116, 82, 74, 58. Appearing large and then shrinking: it has passed. The hand-marked start of 01:02 matches the moment the car shows in the mirror.
+
+Consequences for the design:
+
+- A simple confidence limit (about 0.9) separates real cars from false detections.
+- Very small detections (under about 40 pixels wide) are distant cars on other parts of the track. They come and go and are ignored.
+- The door mirror gives an early sign of a car behind. It is used as supporting evidence only, since the mirror moves in the picture and is small.
+- Speed: at 10 pictures per second, detection runs at about real time, which would make a full day's footage take over four hours. Analysing 5 pictures per second halves that and is still fine for events lasting two seconds or more. Faster settings of the model are to be tried.
+
+### Car tracking as built (result of step 6)
+
+Four parts, each in its own file:
+
+| Part | File | What it does |
+|---|---|---|
+| Detector | `detect_cars.py` | Runs the model on 5 pictures per second and returns a box around every car, truck or bus it finds |
+| Tracker | `tracking.py` | Links the boxes from picture to picture, so each car has a history |
+| Rules | `car_events.py` | Turns each car's history into `overtaking`, `overtaken` or `held up` |
+| Timeline | `timeline.py` | Fills the gaps with `clear`, combines overlapping labels, rounds to whole seconds |
+
+**Height, not width.** The rules use how tall another car looks. Width was tried first and failed: a car seen from the side in a corner is more than twice as wide as the same car seen from behind, so its width jumps around while its distance does not change. Height stays steady.
+
+The rules, with heights as a part of the picture's height:
+
+| Event | Rule |
+|---|---|
+| `overtaking` | The car is taller than 0.11 of the picture (it is right next to us) and then vanishes while that large, and it was already being followed before it got that large. Starts where its final growth began. |
+| `overtaken` | The car is taller than 0.11 of the picture from the first moment it is seen, and then shrinks. Starts 3 seconds before it appears; ends where it has shrunk to half. |
+| `held up` | The car stays taller than 0.0625 of the picture for at least 3 seconds, outside of a pass. |
+| nothing | A car that stays smaller than that (a quicker car ahead), a car seen large in only one picture, a car seen large from first to last sighting, a car the model was never at least 0.9 sure about. |
+
+All values are in `settings.py`.
+
+**Speed:** decoding and detection together run at about 3 times real time. A day's footage (about 260 minutes) takes about 90 minutes.
+
+**Scores against the hand-made files.** Counted only for the part of each video driven at pace (after `warm up`, before `cooling` or `crash`):
+
+| Example | Real events found | Missed | Extra detections |
+|---|---|---|---|
+| 12-17 | 4 of 4 (overtaken, 2 overtaking, held up) | 0 | 0 |
+| 10-32 | 4 of 5 (overtaken, 3 overtaking) | 1 (held up) | 1 (held up) |
+| 09-41 | 2 of 2 (2 overtaking) | 0 | 4 |
+
+Notes on these numbers:
+
+- **The four extra detections in 09-41 are real cars.** Pictures at each of those moments (02:54, 03:35 to 03:40, 04:05, 10:34 to 10:38) show another car close ahead. The hand-made file for this session does not mention them. Whether they are events the reference lacks, or situations that should stay `clear`, is for the user to say.
+- **The missed `held up` in 10-32** is a car that the user marked as holding them up while it was still small in the picture (0.045 to 0.055 of the picture's height). At that size the 12-17 example has a car ahead that the user marked as `clear`. Size alone cannot tell these two apart, so the rule stays on the cautious side.
+- **The extra `held up` in 10-32** is the car that has just overtaken: it stays close ahead for five seconds before pulling away.
+- Three videos are too few to call this accurate. The numbers show the method works in principle.
+
+**Not solved in this step: the pit lane.** Outside the part driven at pace the rules produce many wrong events: parked cars passed slowly in the paddock read as `overtaking`, cars driving past while standing still read as `overtaken` (in 12-17, after the breakdown). Over the three whole videos that is about 20 wrong events. They disappear once the module knows when the car is not driving at pace, which is step 8 (`warm up` and `cooling`). **Until then the events files are not usable outside the at-pace part.** It may be worth doing step 8 before step 7.
+
+**Tried and dropped: the door mirror.** The model does find the overtaking car in the door mirror seconds before it comes alongside, but the mirror is too small and moves too much in the stabilised picture for a reliable rule. The fixed 3-second lead before the car appears is used instead.
+
 ### Proposed method per event type
 
 | Label | Proposed method | Confidence in the method |
 |---|---|---|
-| `overtaking` | Detect other cars with a ready-made object detection model and follow each one across frames. A car that is ahead, grows, moves to the side and leaves the picture has been passed. | Good |
-| `overtaken` | Same tracking. A car that enters from the side edge and moves toward the centre has passed. Start time is moved 3 seconds earlier. | Good |
-| `held up` | Same tracking. A car that stays large and centred ahead for several seconds without being passed. | Good, but no example yet |
+| `overtaking` | **Built in step 6** (see above): a tracked car grows and then vanishes while large. | Good on the examples |
+| `overtaken` | **Built in step 6:** a tracked car appears large and then shrinks. Start time is moved 3 seconds earlier. | Good on the examples |
+| `held up` | **Built in step 6:** a tracked car stays close ahead for at least 3 seconds. | Medium: size alone does not always match the user's judgement |
 | `sliding` | Gyroscope and accelerometer together: the car turns faster than its cornering force and speed explain. Supported by tyre sound. A simple threshold on one signal is not enough (see step 4 result). | Medium; sensor data is confirmed, the method is not |
 | `offtrack` | Accelerometer: strong vibration typical of grass or gravel. Supported by the picture: the surface under the car is not tarmac. | Medium |
 | `warm up`, `cooling` | GPS speed where the camera has a fix; otherwise an estimate of pace from engine sound, vibration and picture motion. First and last sustained stretch at low pace. | Medium; the business specification accepts leaving these out |
@@ -271,6 +369,6 @@ Idea from the user: in a later phase, read the RaceBox Mini recording of the sam
 
 1. Do the libraries we need (video reading, detection on the graphics card) already support Python 3.15? Until checked, the project stays on 3.13.
 2. May Python libraries be installed on this PC?
-3. Which part of the picture should the analysis cut out, and how is it set when the camera mount changes?
+3. Will future recordings be made with stabilisation off?
 4. Which signal combination separates a slide from driving over a kerb?
 5. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)

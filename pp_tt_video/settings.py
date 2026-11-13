@@ -25,12 +25,69 @@ FFPROBE = EXECUTABLES_FOLDER / "ffprobe.exe"
 # The video is analysed in a reduced form: smaller pictures, fewer of them.
 # The width is fixed here; the height follows from the shape of the video.
 ANALYSIS_WIDTH = 1280
-ANALYSIS_FRAMES_PER_SECOND = 10
+ANALYSIS_FRAMES_PER_SECOND = 5
 
 # Decode the video on the Nvidia graphics card. Measured on an RTX 3060 Ti:
 # about 7 times faster than real time, against about 2 times on the processor.
 # Set to False on a PC without an Nvidia card.
 USE_GRAPHICS_CARD = True
+
+# --- Finding other cars ------------------------------------------------------
+
+# What the detection model calls the things we treat as "another car".
+VEHICLE_NAMES = {"car", "truck", "bus"}
+
+# The model gives every find a confidence between 0 and 1. Finds below this
+# value are thrown away at once.
+MIN_DETECTION_CONFIDENCE = 0.5
+
+# A find wider than this part of the picture is the own cockpit, not a car.
+MAX_CAR_WIDTH_FRACTION = 0.45
+
+# How many pictures are handed to the model at once. More is a little faster
+# but needs more memory on the graphics card.
+DETECTION_BATCH_SIZE = 4
+
+# --- Following cars from picture to picture ----------------------------------
+
+# A car that is not seen for longer than this has gone; its track is closed.
+TRACK_MAX_GAP_SECONDS = 1.0
+
+# Between two pictures a car may move at most this many of its own widths
+# and still count as the same car.
+TRACK_MAX_JUMP_IN_WIDTHS = 1.5
+
+# Between two pictures a car's height may change at most by this factor.
+TRACK_MAX_SIZE_CHANGE = 2.5
+
+# --- Turning car tracks into events ------------------------------------------
+#
+# How large another car looks tells how near it is. Its height in the picture
+# is used, not its width: a car seen from the side is much wider than one seen
+# from behind, but about as tall. Heights are given as a part of the picture's
+# height, so they do not depend on the analysis size.
+
+# A track only counts as a real car if the model was this sure at least once.
+CAR_MIN_CONFIDENCE = 0.9
+
+# A car taller than this is right next to us: we are passing it, or it us.
+# (0.11 of the picture is about 80 of 720 pixels.)
+PASSING_CAR_HEIGHT = 0.11
+
+# A car ahead that is taller than this is close enough to hold us up.
+CLOSE_CAR_HEIGHT = 0.0625
+
+# "held up" is only marked after being close behind a car for this long.
+HELD_UP_MIN_SECONDS = 3
+
+# "overtaken" starts this long before the other car first appears, so that
+# the whole process is covered.
+OVERTAKEN_LEAD_SECONDS = 3
+
+# An overtake is taken to start where the other car reached this part of its
+# final size, and "overtaken" to end where it has shrunk to this part.
+PASS_START_PART_OF_PEAK = 0.55
+PASS_END_PART_OF_PEAK = 0.5
 
 # File extensions that count as video files (compared in lower case).
 VIDEO_EXTENSIONS = {".mp4"}

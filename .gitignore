@@ -17,3 +17,6 @@ example video  and output file/
 
 # Files Python creates by itself when code runs.
 __pycache__/
+
+# The virtual environment holds the installed Python libraries (several GB).
+.venv/
