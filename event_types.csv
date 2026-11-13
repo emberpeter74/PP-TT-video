@@ -1,5 +1,6 @@
 label,description
-warm up,"From the start of the video until the car first drives at full pace: standing in the paddock or pit lane, leaving the pits, and the slow first lap."
+out of session,"The session has not started yet or is already over: the car is in the paddock or the pit lane, drives to the track, has left the track, or is parked. From the start of the video until the car joins the track, and from leaving the track until the end of the video."
+warm up,"From joining the track until the car first drives at full pace: the slow first lap."
 clear,"The car drives at pace on the track. No other car is close ahead or alongside, nothing lies on the road, and the car stays on the tarmac and under control. A car further ahead that I am not catching does not change this."
 offtrack,"My car leaves the tarmac with at least two wheels: grass, gravel or run-off area is under or directly ahead of the car, often with a shaking picture or dust. Ends when the car is back on the tarmac."
 sliding,"My car loses grip but stays on the track: the view swings sideways more than the road bends, the steering is corrected quickly, tyres may squeal. Ends when the car drives straight and stable again."
@@ -8,4 +9,4 @@ overtaken,"Another car appears at the side of the picture coming from behind, pa
 held up,"A car ahead of me holds me up: I am close behind it, I am not falling back, and it dictates my line and speed. Ends when I start to overtake it, when it pulls away, or when it leaves the track ahead of me."
 obstacle,"Something is on or beside the road that should not be there: debris, car parts, fluid, gravel thrown onto the tarmac, or a stopped car. Starts when it becomes visible; ends when I have passed it."
 crash,"My car can no longer drive on at pace: it hits something, is hit by another car, or stops with a mechanical failure. Lasts until the end of the video unless the car drives on."
-cooling,"From the moment the car stops driving at pace at the end of the session until the end of the video: slow final lap, entering the pit lane, parking."
+cooling,"From the moment the car stops driving at pace at the end of the session until it leaves the track: the slow final lap."

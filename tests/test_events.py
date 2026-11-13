@@ -115,7 +115,7 @@ class ProblemsTest(unittest.TestCase):
 class EventTypesTest(unittest.TestCase):
     def test_list_contains_the_agreed_labels(self):
         labels = set(load_event_types())
-        expected = {"warm up", "clear", "offtrack", "sliding", "overtaking", "overtaken", "held up", "obstacle", "crash", "cooling"}
+        expected = {"out of session", "warm up", "clear", "offtrack", "sliding", "overtaking", "overtaken", "held up", "obstacle", "crash", "cooling"}
         self.assertEqual(labels, expected)
 
     def test_other_event_is_always_known(self):

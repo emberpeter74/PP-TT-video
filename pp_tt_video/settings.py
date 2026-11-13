@@ -128,6 +128,54 @@ PACE_MIN_EDGE_SECONDS = 10
 WARM_UP_LABEL = "warm up"
 COOLING_LABEL = "cooling"
 
+# --- Out of session, and crash ---------------------------------------------------
+#
+# "out of session" is the time before the car joins the track and after it
+# has left it: paddock, pit lane, parking.
+
+# What the camera's GPS reports as "fix" when it knows its position.
+GPS_FIX_VALUES = {"2", "3"}
+
+# At the start of the video the car counts as not yet on the track when it
+# is slower than this (km/h). The slowest corners of a track are faster.
+SESSION_SLOW_SPEED = 45
+
+# The speed is looked for in this many seconds at the start of the video.
+SESSION_START_LOOK_SECONDS = 15
+
+# Without GPS the speed is worked out in a turn (cornering force divided by
+# turning rate). That is only trusted when the car turns at least this fast
+# (radians per second).
+SESSION_MIN_TURNING_FOR_SPEED = 0.3
+
+# Joining the track, the car accelerates at least this hard (m/s²) ...
+SESSION_JOIN_FORCE = 2.0
+
+# ... and the session starts when the acceleration has dropped below this.
+SESSION_JOIN_END_FORCE = 1.0
+
+# The car stands still when it shakes less than this (m/s²). Driving, even
+# slowly, shakes it more.
+STANDSTILL_MAX_SHAKE = 1.0
+
+# The video must end with at least this many seconds of standing still for
+# the car to count as parked.
+STANDSTILL_MIN_SECONDS = 3
+
+# A corner of the track has at least this much cornering force (m/s²). The
+# turns of a pit lane and paddock, taken slowly, have less.
+SESSION_TRACK_CORNER_FORCE = 5.0
+
+# "out of session" starts this long after the last corner of the track.
+SESSION_LEAVE_SECONDS = 10
+
+# If the car stands still sooner than this after it stopped driving at pace,
+# there was no cool-down lap: something broke or it hit something.
+CRASH_MAX_SECONDS = 60
+
+OUT_OF_SESSION_LABEL = "out of session"
+CRASH_LABEL = "crash"
+
 # --- Sliding -------------------------------------------------------------------
 #
 # A slide is recognised by its catch: the car is still pushed sideways hard,

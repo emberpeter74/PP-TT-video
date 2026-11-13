@@ -29,11 +29,13 @@ GoPro MP4 footage recorded from inside the user's race car, processed offline af
 
 | Example | Length | Events it contains |
 |---|---|---|
-| 09-41 | 13:07 | warm up, sliding (4), offtrack (2), overtaking (2), cooling |
-| 10-32 | 10:25 | overtaken, overtaking (3), sliding (4), held up, cooling |
-| 12-17 | 6:27 | overtaken, overtaking (2), obstacle (3), sliding (2), held up, crash |
+| 09-41 | 13:07 | out of session (2), warm up, sliding (4), offtrack (2), overtaking (2), cooling |
+| 10-32 | 10:25 | out of session (2), overtaken, overtaking (3), sliding (4), held up, cooling |
+| 12-17 | 6:27 | out of session, overtaken, overtaking (2), obstacle (3), sliding (2), held up, crash |
 
 Together they contain every agreed event type at least once. The counts are small, so they can show whether detection works in principle, not how accurate it is in general.
+
+**Two files per example.** `name-events.original.txt` is the file exactly as the user wrote it and is never changed by anyone else. `name-events.txt` is a cleaned copy with the same content in the agreed format (labels from the event type list, lines in time order); the comparison tool and the checks use the cleaned copy. When the user changes an original, the cleaned copy is updated to match.
 
 Reference input, described in detail below: `example video  and output file/RaceBox Track Sessionon 30-05-2026 09-41.MP4`
 
@@ -73,6 +75,7 @@ States seen in the example output file:
 
 | Label | Meaning |
 |---|---|
+| `out of session` | The session has not started yet or is already over (added by the user after step 7) |
 | `warm up` | Start of the session before driving at pace |
 | `clear` | Clear track, nothing unusual |
 | `offtrack` | The user's car leaves the track |
@@ -95,7 +98,8 @@ These are the description texts for each entry in the event type list. All are w
 
 | Label | Description |
 |---|---|
-| `warm up` | From the start of the video until the car first drives at full pace: standing in the paddock or pit lane, leaving the pits, and the slow first lap. |
+| `out of session` | The session has not started yet or is already over: the car is in the paddock or the pit lane, drives to the track, has left the track, or is parked. From the start of the video until the car joins the track, and from leaving the track until the end of the video. (Wording proposed, to be confirmed.) |
+| `warm up` | From joining the track until the car first drives at full pace: the slow first lap. (Wording changed when `out of session` was added, to be confirmed.) |
 | `clear` | The car drives at pace on the track. No other car is close ahead or alongside, nothing lies on the road, and the car stays on the tarmac and under control. A car further ahead that I am not catching does not change this. |
 | `offtrack` | My car leaves the tarmac with at least two wheels: grass, gravel or run-off area is under or directly ahead of the car, often with a shaking picture or dust. Ends when the car is back on the tarmac. |
 | `sliding` | My car loses grip but stays on the track: the view swings sideways more than the road bends, the steering is corrected quickly, tyres may squeal. Ends when the car drives straight and stable again. |
@@ -104,7 +108,7 @@ These are the description texts for each entry in the event type list. All are w
 | `held up` | A car ahead of me holds me up: I am close behind it, I am not falling back, and it dictates my line and speed. Ends when I start to overtake it, when it pulls away, or when it leaves the track ahead of me. |
 | `obstacle` | Something is on or beside the road that should not be there: debris, car parts, fluid, gravel thrown onto the tarmac, or a stopped car. Starts when it becomes visible; ends when I have passed it. |
 | `crash` | My car can no longer drive on at pace: it hits something, is hit by another car, or stops with a mechanical failure. Lasts until the end of the video unless the car drives on. (Draft, to be confirmed. Added from the third example, where the clutch failed.) |
-| `cooling` | From the moment the car stops driving at pace at the end of the session until the end of the video: slow final lap, entering the pit lane, parking. |
+| `cooling` | From the moment the car stops driving at pace at the end of the session until it leaves the track: the slow final lap. (Wording changed when `out of session` was added, to be confirmed.) |
 | `other event` | Anything clearly unusual that fits none of the descriptions above. (Fixed label, not part of the list.) |
 
 Decided by the user:
@@ -126,17 +130,31 @@ Decided by the user:
 - `warm up` is only at the start of a video and `cooling` only at the end. A slow stretch in the middle of a session is neither.
 - A video that starts at pace has no `warm up`; one that ends at pace has no `cooling`.
 
+`out of session` (decided by the user, built after step 7):
+
+- It marks the parts of the video in which the session has not started yet or is already over. Paddock, pit lane, the way to and from the track and parking all count the same.
+- **A video can start before the car reaches the track, or when it is already on the track.** It can end after the car has left the track, or before. `out of session` is only written where the video shows such a part.
+- The order of the large parts of a video is: `out of session`, `warm up`, the part at pace, `cooling`, `out of session`. Any of them can be missing.
+- **A brisk first lap is not `warm up`** (decided by the user). When the engine is already hot the first lap is driven at pace, and the module rightly reports no `warm up`: in the 10-32 and 12-17 examples `out of session` is followed directly by `clear`.
+- **After a crash there is no `cooling` and no `out of session`** (decided by the user): `crash` lasts until the end of the video. It does not matter when the car was taken off the track.
+- **Another car standing on the track is an `obstacle`** like any other (decided by the user). Not built yet.
+
+`crash`, as far as it is built:
+
+- The module reports `crash` when the car stands still less than 60 seconds after it stopped driving at pace: there was no cool-down lap, so something broke or was hit. This finds the breakdown in the 12-17 example.
+- Known risk, accepted by the user: driving straight into the pits from a fast lap and parking within a minute would also be reported as `crash`.
+- A collision after which the car drives on is not detected.
+
 Assumptions made while building this, to be confirmed by the user:
 
-- **No car events during `warm up` and `cooling`.** `overtaking`, `overtaken` and `held up` are not reported there. In the pit lane and paddock, parked and passing cars would otherwise be reported as events, and the larger program ignores everything that is not `clear` anyway.
-- **A video in which the car never drives at pace is `warm up` from start to end.**
-- **After a breakdown the rest of the video is reported as `cooling`**, because `crash` is not detected yet. In the 12-17 example the module writes `cooling` from 05:02 where the hand-made file has `crash` from 05:00.
+- **Events are only reported in the part at pace.** `overtaking`, `overtaken`, `held up`, `sliding` and `offtrack` are not reported during `out of session`, `warm up`, `cooling` and `crash`. In the pit lane and paddock, parked and passing cars would otherwise be reported as events, and the larger program ignores everything that is not `clear` anyway.
+- **A video in which the car never drives at pace is `warm up`**, after any `out of session` at its start.
 
 `sliding` and `offtrack` (built in step 7, from the camera's motion sensors):
 
 - `sliding` is reported for slides the driver catches with a quick steering correction. All 10 slides marked in the examples are of this kind and are found.
 - `offtrack` is reported only when the car clearly shakes on grass or gravel for a second or more. Two wheels off for a moment feel like a kerb to the sensors and are left as `clear`, following the rule that a false alarm is worse than a missed event. Of the 2 marked in the examples, 1 is found.
-- Assumption, to be confirmed by the user: like the car events, neither is reported during `warm up` and `cooling`.
+- Like the car events, neither is reported outside the part at pace (see the assumption above).
 
 Further candidates, not yet agreed: traffic ahead without a pass, flags or light panels, a slow car, pit lane, weather or surface change.
 
@@ -244,9 +262,9 @@ The format has no place for a confidence value or other extra fields.
 ## 10. Open questions
 
 1. Is the `crash` description right, or should a mechanical failure be its own event type?
-2. The 10-32 and 12-17 examples start with `clear`, not `warm up`. Did those recordings start at full pace? (The motion sensors say yes: in both, the car is already braking and accelerating hard in the first seconds. To be confirmed by the user.)
-3. Are the three assumptions about `warm up` and `cooling` in section 4 right?
+2. Are the two assumptions in section 4 right (events only in the part at pace; a video never at pace is `warm up`)?
+3. Are the changed descriptions of `out of session`, `warm up` and `cooling` in section 4 right?
 4. In the 09-41 example the module reports a slide at 02:47 that the hand-made file does not have. Is it a real slide?
 5. In the 12-17 example the hand-made file has `sliding` from 02:49 to 03:11. Did the slide last that long, or is a `clear` line missing?
 
-Settled: the two further examples promised by the user have been provided (see section 3).
+Settled: the two further examples promised by the user have been provided (see section 3). The 10-32 and 12-17 recordings start in the pit exit and go straight to pace: `out of session` for a few seconds, then `clear`, no `warm up` (confirmed by the user).

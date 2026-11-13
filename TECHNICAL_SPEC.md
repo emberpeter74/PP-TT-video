@@ -1,6 +1,6 @@
 # Trackday footage analysis module: technical specification
 
-Status: steps 0 to 8 of the order of work (section 13) are built. Sections marked "as built" or "result of step" describe what exists; the rest is still a proposal.
+Status: steps 0 to 8 of the order of work (section 13) are built, plus `out of session` and a first rule for `crash`. Sections marked "as built" or "result of step" describe what exists; the rest is still a proposal.
 
 This document says **how** the module is built. **What** it must do is in `BUSINESS_SPEC.md`, which stays the authority: if the two disagree, the business specification wins.
 
@@ -291,7 +291,7 @@ Averaging the 200 measurements of a second removes the vibration of engine and r
 3. The part at pace runs from the start of the first such stretch to the end of the last. Slow moments in between stay inside it.
 4. The 40-second average blurs the edges, so each edge is moved inward to the first or last second with a force of at least 3.0 m/s².
 5. An edge closer than 10 seconds to the start or end of the video means the video starts or ends at pace.
-6. Before the part is `warm up`, after it `cooling`. Car events that fall into either are dropped.
+6. Before the part is `warm up`, after it `cooling`. Car events that fall into either are dropped. (Since then refined by `session.py`, see "Out of session and crash as built".)
 
 All values are in `settings.py`.
 
@@ -351,6 +351,51 @@ Limits:
 - The values come from one day, one car and one driver on a dry track.
 - The sound (tyre squeal) is not used; the sensors proved enough on the examples.
 
+### Out of session and crash as built (after step 7)
+
+`session.py` divides a video into its large parts, in this order: `out of session`, `warm up`, the part at pace, `cooling` (or `crash`), `out of session`. The part at pace still comes from `pace.py`; the rest is new. Any part can be missing: a video may start on the track or end before the car leaves it (stated by the user).
+
+**Start: has the car joined the track yet?**
+
+1. A sign is needed that the car is not on the track at the start of the video: it is slower than 45 km/h in the first 15 seconds. The slowest corners of the track are above 50 km/h.
+2. The speed comes from the GPS when the camera has a fix (10-32: 35 km/h, 12-17: 24 km/h). Without a fix it is worked out in the first turn: cornering force divided by turning rate (09-41: 3.0 m/s² at 0.44 radians per second is 25 km/h). The turn must be at least 0.3 radians per second for this to be trusted.
+3. Without such a sign the video is taken to start on the track: no `out of session`.
+4. With it, `out of session` lasts until the first acceleration onto the track is over: the car accelerates with at least 2 m/s², and the part ends when that drops below 1 m/s².
+5. Braking with 2 m/s² or more before that acceleration means the car is on the track already: no `out of session`.
+
+**End: has the car left the track?**
+
+1. The video must end with the car standing still for at least 3 seconds. Standing still is read from the shake (below 1.0 m/s²; driving, even slowly, shakes the car more). If the video ends while the car moves, the last part simply runs to the end.
+2. `out of session` starts 10 seconds after the last real corner (cornering force of 5 m/s² or more) before that standstill. The turns of the pit lane and paddock stay below 3.5 m/s² in the examples.
+
+**Crash.** If the car stands still less than 60 seconds after it stopped driving at pace, there was no cool-down lap. Everything after the part at pace is then `crash`, with no `cooling` and no `out of session` (decided by the user).
+
+| Example | Pace ends | Car stands still | Seconds between | Result |
+|---|---|---|---|---|
+| 09-41 | 11:20 | 12:50 | 90 | `cooling`, then `out of session` |
+| 10-32 | 07:34 | 09:14 | 100 | `cooling`, then `out of session` |
+| 12-17 | 05:01 | 05:37 | 36 | `crash` |
+
+**Events are only kept in the part at pace.** Everything a detector reports during `out of session`, `warm up`, `cooling` or `crash` is dropped.
+
+Result on the examples, against the times the user marked:
+
+| Example | Marked by hand | Module |
+|---|---|---|
+| 09-41 | `out of session` until 00:17 and from 12:38 | until 00:18 and from 12:38 |
+| 10-32 | `out of session` until 00:05 and from 08:44 | until 00:03 and from 08:45 |
+| 12-17 | `out of session` until 00:06, `crash` from 05:00 | until 00:08, `crash` from 05:02 |
+
+All within the tolerance of 5 seconds.
+
+Limits:
+
+- **Fitted on three videos.** The 10 seconds after the last corner come from two examples; the 60 seconds for a crash separate 36 from 90. Another track, with a longer pit lane or a corner in it, will need other values.
+- **A false `crash`:** driving straight from a fast lap into the pits and parking within a minute looks the same as a breakdown (risk accepted by the user).
+- **A collision after which the car drives on** is not detected.
+- **A video that starts in the pit lane while already rolling straight**, without GPS fix, shows no sign of being off the track and gets no `out of session` at its start.
+- All values are in `settings.py`.
+
 ### Proposed method per event type
 
 | Label | Proposed method | Confidence in the method |
@@ -361,6 +406,8 @@ Limits:
 | `sliding` | **Built in step 7** (see above): the car keeps its cornering force but turns against the corner. | Good on the examples, for slides that are caught |
 | `offtrack` | **Built in step 7:** hard up-and-down shaking for a second or more. The picture is not used yet. | Medium: finds clear cases, misses two wheels on the grass |
 | `warm up`, `cooling` | **Built in step 8** (see above): how hard the car brakes and accelerates, from the accelerometer. Not from speed. | Good on the examples |
+| `out of session` | **Built** (see above): slow at the start of the video until the car has accelerated onto the track; after the last real corner before the car parks. | Medium: fits the three examples, values are track-dependent |
+| `crash` | **First rule built** (see above): the car stands still within a minute after driving at pace. Collisions after which the car drives on are open. | Medium: one example |
 | `obstacle` | Hardest. Objects on the road that are not moving cars: object detection for stopped cars, description-based recognition for debris. | Low; debris is small and rare |
 | `other event` | Compare each moment with normal clear driving in the same video and flag only strong deviations. | Low; conflicts with the false-alarm rule, so it starts very conservative |
 
@@ -404,7 +451,7 @@ Values the user may want to tune are kept in one settings place with plain names
 
 ## 11. Measuring accuracy
 
-- The hand-made events files are the reference (one exists, two more are promised).
+- The hand-made events files are the reference. Each example has `name-events.original.txt`, exactly as the user wrote it, and `name-events.txt`, a cleaned copy in the agreed format. The comparison tool and the checks use the cleaned copy.
 - A comparison tool lines up the module's events file with the reference and counts, per label: correct detections (within 5 seconds), false alarms, and missed events.
 - Every change to a detector is judged by these counts, with false alarms weighted most.
 - Limitation: three videos are few. Results will be indicative, not statistical proof. `held up` has no example yet.
@@ -445,6 +492,7 @@ Because it is public, anyone can read everything in it. Consequences:
 6. Car tracking: `overtaking`, `overtaken`, `held up`.
 7. `sliding` and `offtrack`.
 8. `warm up` and `cooling`.
+   - Added after step 7 at the user's wish: `out of session`, and a first rule for `crash`.
 9. `obstacle`, `other event`, and the description experiment.
 
 Each step ends with something that can be run and checked, so the user can follow and learn step by step.

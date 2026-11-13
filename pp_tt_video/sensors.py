@@ -1,4 +1,4 @@
-"""Reads the motion sensor data that the GoPro stores inside the video file.
+"""Reads the sensor data that the GoPro stores inside the video file.
 
 The camera has an accelerometer (which forces act on it) and a gyroscope
 (how fast it rotates). Both are measured about 200 times per second and are
@@ -6,11 +6,12 @@ stored in blocks of one second. The camera is fixed to the car, so these
 are the forces on the car and the rotation of the car.
 
 Unlike the GPS, the motion sensors need no satellites: the data is there for
-the whole video.
+the whole video. The GPS speed is read too, as a help for the moments when
+the camera did have a satellite fix; no rule may depend on it.
 """
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pp_tt_video import settings
@@ -31,6 +32,9 @@ class SensorSecond:
     start_seconds: float   # position of the block in the video
     acceleration: list     # measurements in m/s², each a tuple of 3 numbers
     rotation: list         # measurements in radians per second, each a tuple of 3
+    # GPS speeds in km/h, only those measured while the camera had a
+    # satellite fix. Often empty: the GPS needs minutes to find satellites.
+    gps_speeds: list = field(default_factory=list)
 
 
 def in_groups_of_three(text):
@@ -52,6 +56,11 @@ def parse_sensor_text(text):
             seconds[-1].acceleration = in_groups_of_three(values)
         elif kind == "G" and seconds:
             seconds[-1].rotation = in_groups_of_three(values)
+        elif kind == "S" and seconds:
+            speed, _, fix = values.partition("|")
+            # Without a fix (0) the speed is made up and must not be used.
+            if fix.strip() in settings.GPS_FIX_VALUES:
+                seconds[-1].gps_speeds.append(float(speed))
     # Blocks without measurements are of no use.
     return [second for second in seconds if second.acceleration and second.rotation]
 

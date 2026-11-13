@@ -36,6 +36,18 @@ class ParseTest(unittest.TestCase):
         seconds = parse_sensor_text(text)
         self.assertEqual([second.start_seconds for second in seconds], [1.001])
 
+    def test_gps_speed_is_kept_only_with_a_fix(self):
+        text = (
+            "T|0|1.001\n"
+            "A|-9.8 0 0\n"
+            "G|0 0 0\n"
+            "S|35.5|3\n"     # fix: the speed counts
+            "S|36.5|2\n"     # fix
+            "S|120.0|0\n"    # no fix: the speed is made up
+        )
+        seconds = parse_sensor_text(text)
+        self.assertEqual(seconds[0].gps_speeds, [35.5, 36.5])
+
     def test_other_lines_are_ignored(self):
         self.assertEqual(parse_sensor_text("something else\n\n"), [])
 

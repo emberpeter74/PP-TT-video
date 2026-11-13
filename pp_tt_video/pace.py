@@ -1,6 +1,6 @@
 """Step 8: find the part of the video that is driven at pace.
 
-Everything before that part is "warm up", everything after it is "cooling".
+What lies before and after that part is named in session.py.
 
 How the car's pace is recognised, without GPS: a driver at pace brakes hard
 and accelerates hard, again and again. On a warm-up or cool-down lap the
@@ -13,7 +13,6 @@ lap is only about 10 km/h slower than a fast lap.
 """
 
 from pp_tt_video import settings
-from pp_tt_video.stretch import Stretch
 
 
 def average(values):
@@ -102,45 +101,11 @@ def find_pace_part(forces):
     return first, last
 
 
-def pace_stretches(pace_part, duration_seconds, start_times=None):
-    """Return the "warm up" and "cooling" stretches around the pace part.
+def outside_pace(stretch, session_parts):
+    """True when a stretch lies, with its middle, outside the part at pace.
 
-    pace_part:   the result of find_pace_part, counted in sensor blocks.
-    start_times: the position in the video of every sensor block. Without
-                 it, block number n is taken to start at n seconds.
+    session_parts: the stretches found by session.py (out of session,
+    warm up, cooling, crash).
     """
-    warm_up, cooling = settings.WARM_UP_LABEL, settings.COOLING_LABEL
-    if pace_part is None:
-        # Never at pace: the car has not got beyond warming up.
-        return [Stretch(0, duration_seconds, warm_up)]
-
-    def time_of(position):
-        return start_times[position] if start_times else position
-
-    first, last = pace_part
-    stretches = []
-    if first > 0:
-        # A stretch includes its last second, so it ends one second before
-        # the first second at pace.
-        stretches.append(Stretch(0, time_of(first) - 1, warm_up))
-    if time_of(last) + 1 < int(duration_seconds):
-        stretches.append(Stretch(time_of(last) + 1, duration_seconds, cooling))
-    return stretches
-
-
-def outside_pace(stretch, pace_stretches_found):
-    """True when a stretch lies, with its middle, in warm up or cooling."""
     middle = (stretch.start + stretch.end) / 2
-    return any(part.start <= middle <= part.end + 1 for part in pace_stretches_found)
-
-
-def detect_pace(sensor_seconds, duration_seconds):
-    """Return the "warm up" and "cooling" stretches of one video.
-
-    Returns an empty list when there is no sensor data to judge from.
-    """
-    if not sensor_seconds:
-        return []
-    forces = forward_force_per_second(sensor_seconds)
-    start_times = [second.start_seconds for second in sensor_seconds]
-    return pace_stretches(find_pace_part(forces), duration_seconds, start_times)
+    return any(part.start <= middle <= part.end + 1 for part in session_parts)
