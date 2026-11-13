@@ -245,7 +245,16 @@ All values are in `settings.py`.
 
 Notes on these numbers:
 
-- **The four extra detections in 09-41 are real cars.** Pictures at each of those moments (02:54, 03:35 to 03:40, 04:05, 10:34 to 10:38) show another car close ahead. The hand-made file for this session does not mention them. Whether they are events the reference lacks, or situations that should stay `clear`, is for the user to say.
+- **The four extra detections in 09-41 are real overtakes** (confirmed by the user, who left them out of the hand-made file on purpose, as a test). Against what really happened, the module's result for them is:
+
+  | Moment | What happened | What the module reports |
+  |---|---|---|
+  | 02:54 | overtaking | `overtaking`: correct |
+  | 03:35 to 03:40 | sliding and overtaking | `held up` from 03:35, `overtaking` from 03:38: the overtake is correct; the `held up` before it is a judgement call |
+  | 04:05 | overtaking | Nothing: **missed**. The car is seen large in only one picture, and the rule that guards against one-picture glitches drops it. An earlier version of the rules, without that guard, found it. |
+  | 10:34 to 10:38 | overtaking | `held up`: **wrong label**. The car is close for 4 seconds, but the pass itself is not recognised. |
+
+  So of 11 real overtakes in the three examples (`overtaking` and `overtaken`), 9 are found, 1 is missed and 1 is reported as `held up`. The two failures are the next things to improve in the car rules. The hand-made events file for 09-41 does not contain these four overtakes yet; until it does, the comparison tool counts them as false alarms.
 - **The missed `held up` in 10-32** is a car that the user marked as holding them up while it was still small in the picture (0.045 to 0.055 of the picture's height). At that size the 12-17 example has a car ahead that the user marked as `clear`. Size alone cannot tell these two apart, so the rule stays on the cautious side.
 - **The extra `held up` in 10-32** is the car that has just overtaken: it stays close ahead for five seconds before pulling away.
 - Three videos are too few to call this accurate. The numbers show the method works in principle.

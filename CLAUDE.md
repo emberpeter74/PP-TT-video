@@ -14,7 +14,8 @@ Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list
 
 - Done: steps 0 to 6 (repository, tools, GPS extraction, events files and comparison tool, sensor data check, video reduction and speed measurement, car tracking for `overtaking`, `overtaken` and `held up`).
 - Next: step 7 (`sliding`, `offtrack`) or step 8 (`warm up`, `cooling`). Step 8 first is worth proposing: until the module knows when the car is not driving at pace, the car rules produce wrong events in the pit lane and paddock (see "Car tracking as built" in the technical spec).
-- Waiting for the author: four close-car moments in the 09-41 example that the hand-made events file does not mention (02:54, 03:35 to 03:40, 04:05, 10:34 to 10:38).
+- Known weak spots in the car rules, from the 09-41 example: the overtake at 04:05 is missed and the one at 10:34 to 10:38 is reported as `held up` (see the table in the technical spec).
+- The hand-made events file for 09-41 lacks four real overtakes (02:54, about 03:38, 04:05, 10:34 to 10:38). The author left them out on purpose as a test. Ask the author for the exact lines before adding them; do not edit the file unasked.
 
 ## Working together
 
