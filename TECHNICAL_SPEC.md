@@ -96,10 +96,36 @@ Analysing every frame at 5.3K is unnecessary and too slow. Proposal:
 |---|---|---|
 | Picture | Other cars, obstacles, road surface | Available |
 | Sound | Tyre squeal (sliding), engine load (warm up, cooling) | Available |
-| Gyroscope and accelerometer | Sliding, off-track vibration, speed changes | Normally recorded by GoPro cameras; **to be verified** in the example file |
-| GPS | Nothing: mostly invalid | Not used for detection |
+| Gyroscope and accelerometer | Sliding, off-track vibration, speed changes | **Verified:** present in all three examples, for the whole video |
+| GPS speed | Warm up, cooling, and as a help for sliding | Present, but only usable while the camera has a satellite fix |
 
-The motion sensors matter: unlike the GPS, they do not need a satellite fix, so if present they are valid for the whole video.
+The motion sensors matter: unlike the GPS, they do not need a satellite fix, so they are valid for the whole video.
+
+### What the example files contain (result of step 4)
+
+All sensor data sits in one data track of the MP4 (GoPro's metadata track), stored in blocks of one second. ExifTool reads it with the `-ee` option, the same way it reads the GPS.
+
+| Data | Rate | Notes |
+|---|---|---|
+| Accelerometer | about 200 values per second, 3 axes, in m/s² | One axis points down (reads about 9.8, gravity), one sideways (above 10 in fast corners), one along the car |
+| Gyroscope | about 200 values per second, 3 axes | How fast the car rotates around each axis |
+| Gravity vector | 30 per second | Which way is down, computed by the camera |
+| Camera orientation | 30 per second | How the camera is turned in space |
+| GPS position and speed | 10 per second | Speed in km/h; each point carries a flag saying whether the camera had a fix |
+| Sound level | about 10 per second | A coarse loudness value, separate from the sound track |
+| Other | once per second or less | Exposure, colour, camera temperature and similar; not needed |
+
+GPS fix per example, read from the camera's own fix flag:
+
+| Example | Points with a fix | Meaning |
+|---|---|---|
+| 09-41 (first session of the day) | 55 of 7873 | Almost no usable GPS |
+| 10-32 | all 6248 | GPS speed usable for the whole video |
+| 12-17 | all 3871 | GPS speed usable for the whole video |
+
+So the GPS is poor only while the camera is still searching for satellites, which mainly hits the first recording of the day. The fix flag tells the module when GPS speed can be trusted. It is a help where available, never something a detector may depend on.
+
+First look at a known event: the slide at 04:53 in the 12-17 example does **not** stand out in simple per-second maximum values. Clear driving over kerbs produces equally large rotation and vibration. A plain threshold will therefore not work for `sliding`; the detector must compare signals, for example how fast the car turns against how hard it is cornering and how fast it is going. This is work for step 7.
 
 ### Proposed method per event type
 
@@ -108,9 +134,9 @@ The motion sensors matter: unlike the GPS, they do not need a satellite fix, so 
 | `overtaking` | Detect other cars with a ready-made object detection model and follow each one across frames. A car that is ahead, grows, moves to the side and leaves the picture has been passed. | Good |
 | `overtaken` | Same tracking. A car that enters from the side edge and moves toward the centre has passed. Start time is moved 3 seconds earlier. | Good |
 | `held up` | Same tracking. A car that stays large and centred ahead for several seconds without being passed. | Good, but no example yet |
-| `sliding` | Gyroscope: the car turns faster than the steering situation explains. Supported by tyre sound. Fallback without sensors: sideways motion of the picture. | Medium; depends on sensor data |
+| `sliding` | Gyroscope and accelerometer together: the car turns faster than its cornering force and speed explain. Supported by tyre sound. A simple threshold on one signal is not enough (see step 4 result). | Medium; sensor data is confirmed, the method is not |
 | `offtrack` | Accelerometer: strong vibration typical of grass or gravel. Supported by the picture: the surface under the car is not tarmac. | Medium |
-| `warm up`, `cooling` | Estimate of pace from engine sound and picture motion; first and last sustained stretch at low pace. | Medium; the business specification accepts leaving these out |
+| `warm up`, `cooling` | GPS speed where the camera has a fix; otherwise an estimate of pace from engine sound, vibration and picture motion. First and last sustained stretch at low pace. | Medium; the business specification accepts leaving these out |
 | `obstacle` | Hardest. Objects on the road that are not moving cars: object detection for stopped cars, description-based recognition for debris. | Low; debris is small and rare |
 | `other event` | Compare each moment with normal clear driving in the same video and flag only strong deviations. | Low; conflicts with the false-alarm rule, so it starts very conservative |
 
@@ -202,7 +228,7 @@ Each step ends with something that can be run and checked, so the user can follo
 ## 14. Open technical questions
 
 1. Do the libraries we need (video reading, detection on the graphics card) already support Python 3.15? Until checked, the project stays on 3.13.
-2. Does the example file contain gyroscope and accelerometer data?
-3. May Python libraries be installed on this PC?
-4. How fast does the reduced video decode on this graphics card?
+2. May Python libraries be installed on this PC?
+3. How fast does the reduced video decode on this graphics card?
+4. Which signal combination separates a slide from driving over a kerb?
 5. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)
