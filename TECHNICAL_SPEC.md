@@ -225,7 +225,20 @@ Because it is public, anyone can read everything in it. Consequences:
 
 Each step ends with something that can be run and checked, so the user can follow and learn step by step.
 
-## 14. Open technical questions
+## 14. Ideas for a later phase
+
+Noted here so they are not lost. None of this is part of the current plan.
+
+### Use RaceBox Mini data for detection
+
+Idea from the user: in a later phase, read the RaceBox Mini recording of the same session, synchronise it with the video, and use it as a signal for detection.
+
+- The RaceBox Mini records at 25 values per second and is more accurate than the GoPro GPS in every respect. Unlike the GoPro GPS, it does not depend on the camera having found satellites.
+- It would give reliable speed and position for the whole video. That helps `warm up` and `cooling` directly, and `sliding` and `offtrack` through the comparison of speed, turning and cornering force.
+- It changes the module's boundary. The business specification currently says that synchronising with RaceBox Mini data belongs to other modules. If this idea is taken up, that boundary must be decided again there first.
+- Until then the detectors are built to work from the GoPro file alone, so RaceBox data can later be added as an extra signal without redesigning them.
+
+## 15. Open technical questions
 
 1. Do the libraries we need (video reading, detection on the graphics card) already support Python 3.15? Until checked, the project stays on 3.13.
 2. May Python libraries be installed on this PC?
