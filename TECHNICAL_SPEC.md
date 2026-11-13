@@ -86,9 +86,38 @@ Rules across all steps:
 
 Analysing every frame at 5.3K is unnecessary and too slow. Proposal:
 
-- Decode with the graphics card, scale down to roughly 1280 pixels wide, and analyse about 5 to 10 frames per second.
+- Decode with the graphics card, scale down to 1280 pixels wide, and analyse 10 frames per second.
 - A tolerance of 5 seconds and events lasting 2 seconds or more make this safe.
-- Expected to run several times faster than real time; **to be measured**, not assumed.
+
+### Speed measurement (result of step 5)
+
+Measured on the 12-17 example (6:27 long, 5312x2988) on the RTX 3060 Ti:
+
+| Method | Time | Speed |
+|---|---|---|
+| Graphics card, reduced to 1280x720, 10 frames per second | 53 s | 7.3 times real time |
+| Graphics card, reduced to 640x360, 10 frames per second | 53 s | 7.3 times real time |
+| Graphics card, 1280x720, all 30 frames per second | 53 s | 7.3 times real time |
+| Processor only, 1280x720, 10 frames per second | 34 s per minute of video | 1.8 times real time |
+| Processor only, one picture per second (key frames) | 38 s | 10.3 times real time |
+
+What this means:
+
+- **The graphics card is four times faster than the processor** and is used by default. A setting switches to the processor on a PC without an Nvidia card.
+- **The output size and frame rate do not change the decoding time.** The camera's pictures build on each other, so every one of them must be decoded even if only a few are kept. The limit is the graphics card's decoder, which was fully busy during the test. Size and frame rate can therefore be chosen for what detection needs.
+- **One picture per second is not worth it.** It is only a little faster and too coarse for events that last two seconds.
+- **A day's footage:** 20 files of about 13 minutes are about 260 minutes of video, which decode in about 36 minutes. Detection comes on top and is not measured yet, but the business requirement of "a few hours" has plenty of room.
+- Reading the video through Python (`pp_tt_video/video.py`) is as fast as ffmpeg alone: 7.3 times real time.
+
+### What the picture looks like
+
+The camera sits behind the driver in an open-top car and looks forward with a very wide angle:
+
+- The road ahead fills only a small band in the middle of the picture. The lower half is dashboard and interior, the top is sky and the windscreen frame, and the driver's helmet covers part of the left side.
+- A car 20 to 30 metres ahead is only about 60 pixels wide in the 1280-pixel picture.
+- Because the car is open, the areas beside it are visible to the left and right of the windscreen frame. That is where a car alongside appears.
+
+Consequence for step 6: shrinking the whole picture wastes most of the pixels on interior and sky. The analysis should instead cut out the region that shows the road and the sides before shrinking, so other cars keep enough detail. The region depends on the camera mount, so it must be a setting.
 
 ### Signals available in a GoPro file
 
@@ -242,6 +271,6 @@ Idea from the user: in a later phase, read the RaceBox Mini recording of the sam
 
 1. Do the libraries we need (video reading, detection on the graphics card) already support Python 3.15? Until checked, the project stays on 3.13.
 2. May Python libraries be installed on this PC?
-3. How fast does the reduced video decode on this graphics card?
+3. Which part of the picture should the analysis cut out, and how is it set when the camera mount changes?
 4. Which signal combination separates a slide from driving over a kerb?
 5. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)

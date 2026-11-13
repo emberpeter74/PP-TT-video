@@ -12,8 +12,8 @@ This file is read by Claude Code at the start of every session. It holds what is
 
 Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list when a step is finished.
 
-- Done: steps 0 to 4 (repository, tools, GPS extraction, events files and comparison tool, sensor data check).
-- Next: step 5, video reduction and a speed measurement.
+- Done: steps 0 to 5 (repository, tools, GPS extraction, events files and comparison tool, sensor data check, video reduction and speed measurement).
+- Next: step 6, car tracking for `overtaking`, `overtaken` and `held up`. It needs the first Python libraries, so ask before installing.
 
 ## Working together
 
@@ -40,6 +40,7 @@ Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list
 - **Run the checks:** `py -V:3.13 -m unittest`
 - **Run the module:** `py -V:3.13 -m pp_tt_video "<video file or folder>"`
 - **Check events files:** `py -V:3.13 -m pp_tt_video.check_events "<folder>"`
+- **Measure reading speed:** `py -V:3.13 -m pp_tt_video.measure_speed "<video>"`
 - **Compare two events files:** `py -V:3.13 -m pp_tt_video.compare "<reference>" "<detected>"`
 - **External tools** (ExifTool, ffmpeg, ffprobe, `gpx.fmt`) are in `executables/`, which is not in Git.
 - **Examples** are in `example video  and output file/` (two spaces after "video"), which is not in Git: three videos of 2.6 to 5.3 GB, each with a hand-made events file and a GPX file. One check needs them and is skipped when they are missing.
