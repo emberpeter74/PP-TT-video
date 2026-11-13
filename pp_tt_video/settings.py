@@ -128,6 +128,56 @@ PACE_MIN_EDGE_SECONDS = 10
 WARM_UP_LABEL = "warm up"
 COOLING_LABEL = "cooling"
 
+# --- Sliding -------------------------------------------------------------------
+#
+# A slide is recognised by its catch: the car is still pushed sideways hard,
+# but turns against the corner. The rule relies on the cornering force and
+# the turning rate having the same sign in a normal corner, which is so for
+# the axes set above.
+
+# The cornering force and the turning rate are looked at this often.
+SLIDE_SAMPLES_PER_SECOND = 10
+
+# The cornering force must be at least this high (m/s²).
+SLIDE_MIN_CORNERING_FORCE = 7.0
+
+# The car must have turned into the corner at least this fast (radians per
+# second; 0.4 is about 23 degrees per second) ...
+SLIDE_MIN_TURNING_BEFORE = 0.4
+
+# ... at most this long before it turns against the corner.
+SLIDE_LOOK_BACK_SECONDS = 1.0
+
+# The car must turn against the corner in at least this many samples.
+SLIDE_MIN_SAMPLES = 2
+
+# Samples closer together than this belong to the same catch.
+SLIDE_GROUP_GAP_SECONDS = 1.0
+
+# "sliding" starts this long before the catch and ends this long after it.
+SLIDE_LEAD_SECONDS = 2.0
+SLIDE_TAIL_SECONDS = 0.0
+
+SLIDING_LABEL = "sliding"
+
+# --- Offtrack ------------------------------------------------------------------
+
+# The shaking of the car is measured this often.
+OFFTRACK_SAMPLES_PER_SECOND = 5
+
+# Off the tarmac the up-and-down force jumps around at least this much
+# (m/s²). On the track it is about 2.5, on a kerb 5 to 6.
+OFFTRACK_MIN_SHAKE = 7.0
+
+# The shaking must last at least this long.
+OFFTRACK_MIN_SECONDS = 1.0
+
+# "offtrack" starts this long before the shaking and ends this long after.
+OFFTRACK_LEAD_SECONDS = 1.5
+OFFTRACK_TAIL_SECONDS = 0.5
+
+OFFTRACK_LABEL = "offtrack"
+
 # File extensions that count as video files (compared in lower case).
 VIDEO_EXTENSIONS = {".mp4"}
 

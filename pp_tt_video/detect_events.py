@@ -5,15 +5,17 @@ found and followed, lets the rules decide, and builds the timeline.
 
 Detected so far:
     from the pictures:       overtaking, overtaken and held up;
-    from the motion sensors: warm up and cooling.
+    from the motion sensors: warm up, cooling, sliding and offtrack.
 """
 
 from pp_tt_video import settings
 from pp_tt_video.car_events import events_of_tracks
 from pp_tt_video.detect_cars import CarDetector
 from pp_tt_video.event_types import load_event_types
+from pp_tt_video.offtrack import detect_offtrack
 from pp_tt_video.pace import detect_pace, outside_pace
 from pp_tt_video.sensors import SensorError, read_sensors
+from pp_tt_video.sliding import detect_sliding
 from pp_tt_video.timeline import build_timeline
 from pp_tt_video.tracking import Tracker
 from pp_tt_video.video import analysis_size, read_frames, read_video_info
@@ -49,26 +51,33 @@ def track_cars(video_path, detector, on_progress=None):
     return tracker.finish(), picture_height
 
 
-def find_pace(video_path, duration_seconds):
-    """Return the "warm up" and "cooling" stretches of one video.
+def detect_from_sensors(video_path, duration_seconds):
+    """Detect everything that is found from the motion sensors.
 
-    A video without usable sensor data gets none: the rest of the detection
-    still works, as it did before this step existed.
+    Returns two lists of stretches: the pace parts ("warm up", "cooling")
+    and the events ("sliding", "offtrack").
+
+    A video without usable sensor data gets neither: the rest of the
+    detection still works without them.
     """
     try:
-        return detect_pace(read_sensors(video_path), duration_seconds)
+        sensor_seconds = read_sensors(video_path)
     except SensorError:
-        return []
+        return [], []
+    pace_parts = detect_pace(sensor_seconds, duration_seconds)
+    events = detect_sliding(sensor_seconds) + detect_offtrack(sensor_seconds)
+    return pace_parts, events
 
 
-def combine_stretches(car_stretches, pace_parts):
+def combine_stretches(event_stretches, pace_parts):
     """Put the stretches of all detectors together.
 
-    Car events are dropped during warm up and cooling. In the paddock and
-    the pit lane the car rules see parked cars as "overtaking" and passing
-    cars as "overtaken"; none of that is an event on the track.
+    Events are dropped during warm up and cooling. In the paddock and the
+    pit lane the car rules see parked cars as "overtaking" and passing cars
+    as "overtaken", and rough ground shakes the car like grass beside the
+    track does; none of that is an event on the track.
     """
-    kept = [stretch for stretch in car_stretches if not outside_pace(stretch, pace_parts)]
+    kept = [stretch for stretch in event_stretches if not outside_pace(stretch, pace_parts)]
     return sorted(pace_parts + kept, key=lambda stretch: stretch.start)
 
 
@@ -77,8 +86,8 @@ def detect_timeline(video_path, detector=None, on_progress=None):
     detector = detector or CarDetector()
     info = read_video_info(video_path)
     # The sensors are read first: it takes seconds, the pictures take minutes.
-    pace_parts = find_pace(video_path, info.duration_seconds)
+    pace_parts, sensor_stretches = detect_from_sensors(video_path, info.duration_seconds)
     tracks, picture_height = track_cars(video_path, detector, on_progress)
     car_stretches = events_of_tracks(tracks, picture_height)
-    stretches = combine_stretches(car_stretches, pace_parts)
+    stretches = combine_stretches(car_stretches + sensor_stretches, pace_parts)
     return build_timeline(stretches, info.duration_seconds, list(load_event_types()))

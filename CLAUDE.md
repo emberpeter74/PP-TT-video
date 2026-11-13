@@ -12,9 +12,11 @@ This file is read by Claude Code at the start of every session. It holds what is
 
 Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list when a step is finished.
 
-- Done: steps 0 to 6 (repository, tools, GPS extraction, events files and comparison tool, sensor data check, video reduction and speed measurement, car tracking for `overtaking`, `overtaken` and `held up`) and step 8 (`warm up` and `cooling` from the motion sensors; car events outside the at-pace part are dropped).
-- Next: step 7 (`sliding`, `offtrack`), then step 9.
-- Three assumptions from step 8 wait for the author's answer (business spec, section 4 and open question 3). `crash` is not detected yet, so after a breakdown the module writes `cooling`.
+- Done: steps 0 to 6 (repository, tools, GPS extraction, events files and comparison tool, sensor data check, video reduction and speed measurement, car tracking for `overtaking`, `overtaken` and `held up`), step 7 (`sliding` and `offtrack` from the motion sensors) and step 8 (`warm up` and `cooling` from the motion sensors; events outside the at-pace part are dropped).
+- Next: step 9 (`obstacle`, `other event`, the description experiment). `crash` belongs to no step yet; propose where it goes.
+- Known weak spots in the sensor rules: the short offtrack at 02:31 in 09-41 is missed (it shakes no more than a kerb), and only slides caught with a steering correction are found.
+- Open questions 3 to 5 in the business spec wait for the author's answer (the step 8 assumptions, a possible unmarked slide at 02:47 in 09-41, the 22-second `sliding` in the 12-17 hand-made file).
+- `crash` is not detected yet, so after a breakdown the module writes `cooling`.
 - Known weak spots in the car rules, from the 09-41 example: the overtake at 04:05 is missed and the one at 10:34 to 10:38 is reported as `held up` (see the table in the technical spec).
 - The hand-made events file for 09-41 lacks four real overtakes (02:54, about 03:38, 04:05, 10:34 to 10:38). The author left them out on purpose as a test. Ask the author for the exact lines before adding them; do not edit the file unasked.
 
@@ -45,7 +47,7 @@ Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list
 - **Measure reading speed:** `.venv\Scripts\python.exe -m pp_tt_video.measure_speed "<video>"`
 - **Compare two events files:** `.venv\Scripts\python.exe -m pp_tt_video.compare "<reference>" "<detected>"`
 - **Detection is slow to repeat** (about a third of the video's length). When tuning rules, save the detections once and work from the saved copy.
-- **The motion sensors are quick to read** (about 5 seconds per video, `pp_tt_video/sensors.py`). Rules that only need them (`pace.py`) can be tried on all examples in seconds.
+- **The motion sensors are quick to read** (about 5 seconds per video, `pp_tt_video/sensors.py`). Rules that only need them (`pace.py`, `sliding.py`, `offtrack.py`) can be tried on all examples in seconds.
 - **External tools** (ExifTool, ffmpeg, ffprobe, `gpx.fmt`) are in `executables/`, which is not in Git.
 - **Examples** are in `example video  and output file/` (two spaces after "video"), which is not in Git: three videos of 2.6 to 5.3 GB, each with a hand-made events file and a GPX file. One check needs them and is skipped when they are missing.
 - **The repository is public.** Nothing private goes into it: no keys, no personal data, no absolute paths from this PC.

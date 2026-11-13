@@ -56,6 +56,28 @@ def parse_sensor_text(text):
     return [second for second in seconds if second.acceleration and second.rotation]
 
 
+def pieces_of_seconds(sensor_seconds, pieces_per_second):
+    """Cut every sensor second into equal pieces.
+
+    Some rules need a finer view than one value per second. Returns a list
+    of (time, acceleration measurements, rotation measurements), one entry
+    per piece, in order of time.
+    """
+    pieces = []
+    for second in sensor_seconds:
+        for number in range(pieces_per_second):
+            def part_of(measurements):
+                first = len(measurements) * number // pieces_per_second
+                last = len(measurements) * (number + 1) // pieces_per_second
+                return measurements[first:last]
+
+            acceleration, rotation = part_of(second.acceleration), part_of(second.rotation)
+            if acceleration and rotation:
+                time = second.start_seconds + number / pieces_per_second
+                pieces.append((time, acceleration, rotation))
+    return pieces
+
+
 def read_sensors(video_path):
     """Read the motion sensor data of one video. Returns a list of SensorSecond.
 

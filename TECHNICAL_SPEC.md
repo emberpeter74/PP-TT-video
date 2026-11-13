@@ -1,6 +1,6 @@
 # Trackday footage analysis module: technical specification
 
-Status: steps 0 to 6 and step 8 of the order of work (section 13) are built. Sections marked "as built" or "result of step" describe what exists; the rest is still a proposal.
+Status: steps 0 to 8 of the order of work (section 13) are built. Sections marked "as built" or "result of step" describe what exists; the rest is still a proposal.
 
 This document says **how** the module is built. **What** it must do is in `BUSINESS_SPEC.md`, which stays the authority: if the two disagree, the business specification wins.
 
@@ -311,6 +311,46 @@ Limits:
 - The GPS speed is not used at all, so the rule behaves the same with and without a satellite fix.
 - A video without sensor data gets no `warm up` or `cooling`; the car rules then run over the whole video as before.
 
+### Sliding and offtrack as built (result of step 7)
+
+Both come from the motion sensors alone, so they cost almost no time and do not depend on the stabilised picture. Both are dropped during `warm up` and `cooling`, like the car events.
+
+**Sliding (`sliding.py`): the catch.** In a normal corner the cornering force and the turning go together. When the rear steps out and the driver steers against it, the car is for a moment still pushed sideways as hard as before but has stopped turning into the corner, or turns the other way. Example, 10-32 at 06:43: the cornering force stays at about 10 m/s² while the turning rate goes from -0.8 to +0.6 radians per second within 0.8 seconds. A kerb or a chicane does not do this: there force and turning change together. This answers open question 4.
+
+The rule, looking 10 times per second:
+
+1. The cornering force is at least 7 m/s².
+2. The car turns against the corner.
+3. Within the second before, it turned into the corner at 0.4 radians per second or more.
+4. This holds in at least 2 samples close together.
+5. `sliding` starts 2 seconds before the catch and ends with it.
+
+**Offtrack (`offtrack.py`): shaking.** The "shake" is how much the up-and-down force jumps around within a fifth of a second (its standard deviation). On the track it is about 2.5 m/s², on a kerb 5 to 6, on grass or gravel 9 to 13. The rule: a shake of at least 7 for at least 1 second. `offtrack` starts 1.5 seconds before the shaking and ends 0.5 seconds after it.
+
+All values are in `settings.py`.
+
+Result on the examples, at pace:
+
+| Example | Marked by hand | Found | Missed | Extra |
+|---|---|---|---|---|
+| 09-41 | 4 sliding, 2 offtrack | 4 sliding, 1 offtrack (11:15) | offtrack at 02:31 | sliding at 02:47 |
+| 10-32 | 4 sliding | 4 sliding | none | none |
+| 12-17 | 2 sliding | 2 sliding | none | none |
+
+Notes:
+
+- **All 10 marked slides are found**, each within 2 seconds of the marked start.
+- **The extra slide at 02:47 in 09-41** shows the same catch as the others, only shorter. Whether it is a real slide the hand-made file leaves out is for the user to check in the video.
+- **The missed offtrack at 02:31 in 09-41** shakes the car at 5 to 7 m/s² for about a second, which is what a kerb does. Lowering the limit to catch it would report kerbs in all three videos. It stays missed: a false alarm is worse than a missed event. The picture (grass under the car) may be able to tell them apart later.
+- **In 12-17 the hand-made file has `sliding` from 02:49 to 03:11**, 22 seconds, directly followed by `held up`. The module reports the slide from 02:48 to 02:51 and `clear` after it. The comparison tool counts this as found.
+- The paddock and the pit lane shake the car as much as grass does (three places in 09-41, one in 10-32). They fall into `warm up` or `cooling` and are dropped there.
+
+Limits:
+
+- Only slides that are caught with a quick steering correction are found. A car that slowly pushes wide over its front wheels shows no catch.
+- The values come from one day, one car and one driver on a dry track.
+- The sound (tyre squeal) is not used; the sensors proved enough on the examples.
+
 ### Proposed method per event type
 
 | Label | Proposed method | Confidence in the method |
@@ -318,8 +358,8 @@ Limits:
 | `overtaking` | **Built in step 6** (see above): a tracked car grows and then vanishes while large. | Good on the examples |
 | `overtaken` | **Built in step 6:** a tracked car appears large and then shrinks. Start time is moved 3 seconds earlier. | Good on the examples |
 | `held up` | **Built in step 6:** a tracked car stays close ahead for at least 3 seconds. | Medium: size alone does not always match the user's judgement |
-| `sliding` | Gyroscope and accelerometer together: the car turns faster than its cornering force and speed explain. Supported by tyre sound. A simple threshold on one signal is not enough (see step 4 result). | Medium; sensor data is confirmed, the method is not |
-| `offtrack` | Accelerometer: strong vibration typical of grass or gravel. Supported by the picture: the surface under the car is not tarmac. | Medium |
+| `sliding` | **Built in step 7** (see above): the car keeps its cornering force but turns against the corner. | Good on the examples, for slides that are caught |
+| `offtrack` | **Built in step 7:** hard up-and-down shaking for a second or more. The picture is not used yet. | Medium: finds clear cases, misses two wheels on the grass |
 | `warm up`, `cooling` | **Built in step 8** (see above): how hard the car brakes and accelerates, from the accelerometer. Not from speed. | Good on the examples |
 | `obstacle` | Hardest. Objects on the road that are not moving cars: object detection for stopped cars, description-based recognition for debris. | Low; debris is small and rare |
 | `other event` | Compare each moment with normal clear driving in the same video and flag only strong deviations. | Low; conflicts with the false-alarm rule, so it starts very conservative |
@@ -427,5 +467,5 @@ Idea from the user: in a later phase, read the RaceBox Mini recording of the sam
 1. Do the libraries we need (video reading, detection on the graphics card) already support Python 3.15? Until checked, the project stays on 3.13.
 2. May Python libraries be installed on this PC?
 3. Will future recordings be made with stabilisation off?
-4. Which signal combination separates a slide from driving over a kerb?
+4. Which signal combination separates a slide from driving over a kerb? (Answered in step 7: cornering force against turning rate, see "Sliding and offtrack as built".)
 5. Which example is the published one, and what is the YouTube link to its video? (Video not uploaded yet.)

@@ -132,6 +132,12 @@ Assumptions made while building this, to be confirmed by the user:
 - **A video in which the car never drives at pace is `warm up` from start to end.**
 - **After a breakdown the rest of the video is reported as `cooling`**, because `crash` is not detected yet. In the 12-17 example the module writes `cooling` from 05:02 where the hand-made file has `crash` from 05:00.
 
+`sliding` and `offtrack` (built in step 7, from the camera's motion sensors):
+
+- `sliding` is reported for slides the driver catches with a quick steering correction. All 10 slides marked in the examples are of this kind and are found.
+- `offtrack` is reported only when the car clearly shakes on grass or gravel for a second or more. Two wheels off for a moment feel like a kerb to the sensors and are left as `clear`, following the rule that a false alarm is worse than a missed event. Of the 2 marked in the examples, 1 is found.
+- Assumption, to be confirmed by the user: like the car events, neither is reported during `warm up` and `cooling`.
+
 Further candidates, not yet agreed: traffic ahead without a pass, flags or light panels, a slow car, pit lane, weather or surface change.
 
 Observations from the example:
@@ -240,5 +246,7 @@ The format has no place for a confidence value or other extra fields.
 1. Is the `crash` description right, or should a mechanical failure be its own event type?
 2. The 10-32 and 12-17 examples start with `clear`, not `warm up`. Did those recordings start at full pace? (The motion sensors say yes: in both, the car is already braking and accelerating hard in the first seconds. To be confirmed by the user.)
 3. Are the three assumptions about `warm up` and `cooling` in section 4 right?
+4. In the 09-41 example the module reports a slide at 02:47 that the hand-made file does not have. Is it a real slide?
+5. In the 12-17 example the hand-made file has `sliding` from 02:49 to 03:11. Did the slide last that long, or is a `clear` line missing?
 
 Settled: the two further examples promised by the user have been provided (see section 3).
