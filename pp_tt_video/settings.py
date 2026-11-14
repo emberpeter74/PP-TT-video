@@ -240,6 +240,19 @@ PROFILE_FILE_NAME = "profile.toml"
 # Git: profiles carry driver names, and the repository is public.
 PROFILES_FOLDER = PROJECT_FOLDER / "profiles"
 
+# make_profile measures how hard a driver typically brakes and corners as a
+# percentile: the 95th percentile is the value only the top 5% of the
+# seconds reach. That is a "typically hard" level that ignores the slow
+# parts of a video (paddock, warm up) and a single odd spike.
+PROFILE_PERCENTILE = 95
+
+# The reference driver's levels (the user), measured the same way. A driver
+# with half these levels gets half the driver values in their profile.
+# First rough values; replaced by the exact measurement on the three
+# examples in step P2.
+REFERENCE_EFFORT = 2.5
+REFERENCE_CORNERING = 11.0
+
 # File extensions that count as video files (compared in lower case).
 VIDEO_EXTENSIONS = {".mp4"}
 
