@@ -10,11 +10,20 @@ thresholds.
 Values that depend on the car or the camera cannot be measured this way.
 They are written into the file as built-in values, switched off, to be
 changed by hand if needed.
+
+Run it from a terminal, in the project folder:
+    .venv\\Scripts\\python.exe -m pp_tt_video.make_profile "<folder with one driver's videos>"
 """
+
+import argparse
+import sys
+from pathlib import Path
 
 from pp_tt_video import settings
 from pp_tt_video.pace import effort_per_second, forward_force_per_second
+from pp_tt_video.pipeline import find_videos
 from pp_tt_video.profile import PROFILE_VALUES
+from pp_tt_video.sensors import SensorError, read_sensors
 from pp_tt_video.session import value_per_second
 
 # What each profile value does, written as a comment above it in the file.
@@ -108,3 +117,97 @@ def profile_text(video_names, braking, cornering):
         if name not in values:
             lines += [f"# {EXPLANATIONS[name]}", f"# {name} = {getattr(settings, name)}", ""]
     return "\n".join(lines)
+
+
+def levels_line(label, braking, cornering):
+    """One line of the report: the two levels and the ratios to the reference."""
+    braking_ratio, cornering_ratio = ratios(braking, cornering)
+    return (f"{label}: braking level {braking:.2f} (ratio {braking_ratio:.2f}), "
+            f"cornering level {cornering:.2f} (ratio {cornering_ratio:.2f})")
+
+
+def make_profile(folder, name=None, overwrite=False, print_only=False, read=read_sensors, on_video=None):
+    """Measure the driver in a folder of videos and write a profile file.
+
+    folder:     the folder with one driver's videos (and no one else's).
+    name:       None writes profile.toml into the folder; a name writes
+                <name>.toml into the profiles folder.
+    print_only: measure and report, but write no file.
+    read:       the function that reads a video's sensor data. The checks
+                hand in a stand-in, so they need no real video.
+    on_video:   if given, on_video(text) is called after each video is read,
+                to show progress (reading takes about 5 seconds per video).
+
+    Returns (ok, message).
+    """
+    folder = Path(folder)
+    if not folder.is_dir():
+        return False, f"Folder not found: {folder}"
+    target = settings.PROFILES_FOLDER / f"{name}.toml" if name else folder / settings.PROFILE_FILE_NAME
+    # Check first, before minutes of reading: an existing profile may have
+    # been changed by hand, and must not be lost by accident.
+    if target.exists() and not overwrite and not print_only:
+        return False, f"{target.name} already exists; use --overwrite to replace it"
+
+    used_names, used_sensors, report = [], [], []
+    for video in find_videos([folder]):
+        try:
+            sensor_seconds = read(video)
+        except SensorError as error:
+            sensor_seconds, reason = [], str(error)
+        else:
+            reason = "no motion sensor data"
+        if not sensor_seconds:
+            line = f"{video.name}: skipped, {reason}"
+        else:
+            used_names.append(video.name)
+            used_sensors.append(sensor_seconds)
+            line = levels_line(video.name, *driver_levels([sensor_seconds]))
+        report.append(line)
+        if on_video:
+            on_video(line)
+
+    if not used_sensors:
+        report.append("No video with motion sensor data found: no profile written.")
+        return False, "\n".join(report)
+
+    braking, cornering = driver_levels(used_sensors)
+    report.append(levels_line(f"All videos together ({len(used_names)} in total)", braking, cornering))
+    if print_only:
+        return True, "\n".join(report)
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(profile_text(used_names, braking, cornering), encoding="utf-8")
+    report.append(f"Profile written to {target}")
+    return True, "\n".join(report)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="pp_tt_video.make_profile",
+        description="Make a driver and car profile from a folder of one driver's videos.",
+    )
+    parser.add_argument("folder", help="the folder with the driver's videos")
+    parser.add_argument("--name", help="write profiles/<name>.toml instead of profile.toml in the folder")
+    parser.add_argument("--overwrite", action="store_true", help="replace a profile that already exists")
+    parser.add_argument("--print-only", action="store_true", help="measure and show the levels, write nothing")
+    arguments = parser.parse_args()
+
+    shown = []   # the lines already printed while the videos were read
+
+    def show(line):
+        # flush=True shows the line at once instead of waiting for more output.
+        print(line, flush=True)
+        shown.append(line)
+
+    ok, message = make_profile(arguments.folder, arguments.name, arguments.overwrite,
+                               arguments.print_only, on_video=show)
+    # The report starts with the per-video lines, which are on the screen
+    # already; print only what comes after them.
+    for line in message.splitlines()[len(shown):]:
+        print(line)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -8,12 +8,13 @@ from unittest import mock
 from pp_tt_video import settings
 from pp_tt_video.make_profile import (
     driver_levels,
+    make_profile,
     percentile,
     profile_text,
     scaled_values,
 )
 from pp_tt_video.profile import load_profile
-from pp_tt_video.sensors import SensorSecond
+from pp_tt_video.sensors import SensorError, SensorSecond
 
 
 def driving(seconds_of_force):
@@ -114,6 +115,106 @@ class ProfileTextTest(unittest.TestCase):
         self.assertIn("a.MP4", text)
         # The car and camera values are there to be switched on by hand.
         self.assertIn("# OFFTRACK_MIN_SHAKE = 7.0", text)
+
+
+def fake_read(video):
+    """Stands in for read_sensors, so no real video is needed.
+
+    A video called "broken..." has no readable sensor data, one called
+    "empty..." has none at all (not a GoPro file); any other is a driver at
+    braking level 1.0 and cornering level 5.0.
+    """
+    if Path(video).name.startswith("broken"):
+        raise SensorError(f"ExifTool failed for {Path(video).name}")
+    if Path(video).name.startswith("empty"):
+        return []
+    return driving([(1.0, 5.0)] * 100)
+
+
+class MakeProfileCommandTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name) / "practice driver"
+        self.folder.mkdir()
+        self.profiles = Path(temporary.name) / "profiles"
+        for patcher in [
+            mock.patch.object(settings, "PROFILES_FOLDER", self.profiles),
+            references(2.0, 10.0),
+        ]:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def add_videos(self, *names):
+        for name in names:
+            (self.folder / name).write_bytes(b"")
+
+    def run_command(self, **options):
+        return make_profile(self.folder, read=fake_read, **options)
+
+    def test_writes_profile_into_the_folder(self):
+        self.add_videos("a.mp4")
+        ok, message = self.run_command()
+        self.assertTrue(ok, message)
+        profile = load_profile(self.folder / "profile.toml")
+        self.assertEqual(profile.values["PACE_MIN_EFFORT"], 0.65)   # half of 1.3
+        self.assertEqual(profile.name, "practice driver")
+
+    def test_name_writes_into_profiles_folder(self):
+        self.add_videos("a.mp4")
+        ok, message = self.run_command(name="son")
+        self.assertTrue(ok, message)
+        self.assertTrue((self.profiles / "son.toml").is_file())
+        self.assertFalse((self.folder / "profile.toml").exists())
+
+    def test_existing_file_is_not_replaced(self):
+        self.add_videos("a.mp4")
+        (self.folder / "profile.toml").write_text("# mine\n", encoding="utf-8")
+        ok, message = self.run_command()
+        self.assertFalse(ok)
+        self.assertIn("--overwrite", message)
+        self.assertEqual((self.folder / "profile.toml").read_text(encoding="utf-8"), "# mine\n")
+
+    def test_overwrite_replaces(self):
+        self.add_videos("a.mp4")
+        (self.folder / "profile.toml").write_text("# mine\n", encoding="utf-8")
+        ok, message = self.run_command(overwrite=True)
+        self.assertTrue(ok, message)
+        self.assertIn("PACE_MIN_EFFORT = 0.65", (self.folder / "profile.toml").read_text(encoding="utf-8"))
+
+    def test_video_without_sensors_is_skipped(self):
+        self.add_videos("a.mp4", "broken.mp4", "empty.mp4")
+        ok, message = self.run_command()
+        self.assertTrue(ok, message)
+        self.assertIn("broken.mp4", message)
+        self.assertIn("empty.mp4", message)
+        text = (self.folder / "profile.toml").read_text(encoding="utf-8")
+        self.assertIn("a.mp4", text)
+        self.assertNotIn("broken.mp4", text)
+
+    def test_no_usable_video_writes_nothing(self):
+        self.add_videos("broken.mp4")
+        ok, message = self.run_command()
+        self.assertFalse(ok)
+        self.assertFalse((self.folder / "profile.toml").exists())
+
+    def test_empty_folder_writes_nothing(self):
+        ok, message = self.run_command()
+        self.assertFalse(ok)
+        self.assertFalse((self.folder / "profile.toml").exists())
+
+    def test_missing_folder_is_refused(self):
+        ok, message = make_profile(self.folder / "nobody", read=fake_read)
+        self.assertFalse(ok)
+        self.assertIn("nobody", message)
+
+    def test_print_only_writes_nothing(self):
+        self.add_videos("a.mp4")
+        ok, message = self.run_command(print_only=True)
+        self.assertTrue(ok, message)
+        self.assertFalse((self.folder / "profile.toml").exists())
+        self.assertIn("1.00", message)   # the braking level
+        self.assertIn("0.50", message)   # the braking ratio
 
 
 if __name__ == "__main__":
