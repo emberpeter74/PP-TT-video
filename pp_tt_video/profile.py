@@ -107,6 +107,35 @@ def load_profile(path):
     return Profile(name, path, values)
 
 
+def find_profile(video, profile_option):
+    """Return the profile file to use for a video, or None for the built-in values.
+
+    profile_option is what was given with --profile, or None. The order:
+      1. --profile: a value ending in .toml is a path to a file; any other
+         value is a name, and means <name>.toml in the profiles folder;
+      2. a profile.toml in the video's own folder;
+      3. nothing: the built-in values.
+    Whether a file named by --profile exists is not checked here: load_profile
+    reports a missing file, with the path it looked for.
+    """
+    if profile_option:
+        if profile_option.lower().endswith(".toml"):
+            return Path(profile_option)
+        return settings.PROFILES_FOLDER / f"{profile_option}.toml"
+    folder_file = Path(video).parent / settings.PROFILE_FILE_NAME
+    if folder_file.is_file():
+        return folder_file
+    return None
+
+
+def profile_for_video(video, profile_option):
+    """Return the Profile to use for a video. Raises ProfileError."""
+    path = find_profile(video, profile_option)
+    if path is None:
+        return BUILT_IN
+    return load_profile(path)
+
+
 @contextmanager
 def using_profile(profile):
     """Apply a profile's values while the block inside "with" runs.

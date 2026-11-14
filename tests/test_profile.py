@@ -3,9 +3,18 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from pp_tt_video import settings
-from pp_tt_video.profile import BUILT_IN, Profile, ProfileError, load_profile, using_profile
+from pp_tt_video.profile import (
+    BUILT_IN,
+    Profile,
+    ProfileError,
+    find_profile,
+    load_profile,
+    profile_for_video,
+    using_profile,
+)
 
 
 def write_file(folder, name, content):
@@ -81,6 +90,52 @@ class LoadProfileTest(unittest.TestCase):
         with self.assertRaises(ProfileError) as caught:
             load_profile(missing)
         self.assertIn("nobody.toml", str(caught.exception))
+
+
+class FindProfileTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name)
+        # The named profiles live in a temporary folder during these checks,
+        # not in the real "profiles" folder of the project.
+        self.profiles = self.folder / "profiles"
+        patcher = mock.patch.object(settings, "PROFILES_FOLDER", self.profiles)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.video = self.folder / "videos" / "a.MP4"
+        self.video.parent.mkdir()
+
+    def test_option_name_means_profiles_folder(self):
+        self.assertEqual(find_profile(self.video, "son"), self.profiles / "son.toml")
+
+    def test_option_ending_in_toml_is_a_path(self):
+        self.assertEqual(find_profile(self.video, "some/where/x.TOML"), Path("some/where/x.TOML"))
+
+    def test_option_wins_over_folder_file(self):
+        write_file(self.video.parent, "profile.toml", "PACE_MIN_EFFORT = 0.5\n")
+        self.assertEqual(find_profile(self.video, "son"), self.profiles / "son.toml")
+
+    def test_folder_file_is_found(self):
+        path = write_file(self.video.parent, "profile.toml", "PACE_MIN_EFFORT = 0.5\n")
+        self.assertEqual(find_profile(self.video, None), path)
+
+    def test_nothing_gives_none(self):
+        self.assertIsNone(find_profile(self.video, None))
+
+    def test_profile_for_video_reads_the_folder_file(self):
+        write_file(self.video.parent, "profile.toml", "PACE_MIN_EFFORT = 0.5\n")
+        profile = profile_for_video(self.video, None)
+        self.assertEqual(profile.values, {"PACE_MIN_EFFORT": 0.5})
+        self.assertEqual(profile.name, "videos")
+
+    def test_profile_for_video_without_profile_is_built_in(self):
+        self.assertEqual(profile_for_video(self.video, None), BUILT_IN)
+
+    def test_missing_named_profile_says_where_it_looked(self):
+        with self.assertRaises(ProfileError) as caught:
+            profile_for_video(self.video, "son")
+        self.assertIn("son.toml", str(caught.exception))
 
 
 class DescriptionTest(unittest.TestCase):
