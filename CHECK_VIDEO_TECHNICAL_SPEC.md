@@ -59,6 +59,8 @@ Changes to existing files, kept as small as possible:
 - `pipeline.py` and `__main__.py`: the new option, and writing the sensor file.
 - `video.py`: may get a way to write pictures to ffmpeg (now it only reads).
 
+**The profile is applied around the drawing.** The pipeline runs the drawing inside the same `with using_profile(...)` block as the detection (see "Driver and car profiles" in `TECHNICAL_SPEC.md`). Everything below that reads a threshold from `settings` therefore gets the profile's value without knowing about profiles. `draw.py` gets the profile's name to write in the top corner of every picture and on the overview.
+
 **The rules are not copied.** `explain.py` calls the same functions the detection uses (`forward_force_per_second`, `effort_per_second`, `find_pace_part`, `cornering_and_turning`, `find_catch_times`, `shake_over_time`, `Tracker`, `events_of_track`, `detect_session`, `combine_stretches`), and the threshold lines come from the same names in `settings.py`. If a rule needs to hand out a value it now keeps to itself (for example why a track was skipped), the rule gets a small helper for that, and the rule's result stays the same.
 
 ## 6. What is drawn, and where it comes from
@@ -151,13 +153,14 @@ Every new piece gets a check in `tests/`, without the example videos:
 - the detections file: saving and loading gives the same boxes,
 - `explain.py`: on made-up boxes and sensor values, the right boxes and events are marked as thrown away, with the right reason; the kept events are the same as the normal detection gives,
 - `draw.py`: drawing a made-up picture does not fail and gives a picture of the right size,
+- the profile: inside `using_profile`, the threshold values handed to the drawing are the profile's, and the profile's name is handed on,
 - the option: without `--check-video`, the events file is byte for byte the same as before.
 
 One check with an example video, skipped when the examples are missing: a short piece of 09-41 gives a check video of the right size and length.
 
 ## 11. Order of work
 
-Before step 9 of `TECHNICAL_SPEC.md`. One commit per step, each ends with something that runs.
+Before step 9 of `TECHNICAL_SPEC.md`, after the profile steps P1 and P2. One commit per step, each ends with something that runs.
 
 - **V1.** Sensor data file, written for every video.
 - **V2.** Detections file: save the raw boxes, load them again; `--check-video` runs or reuses the detection.

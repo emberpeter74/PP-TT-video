@@ -15,6 +15,9 @@ executables/
 # Remove this line to include its events file and GPX file.
 example video  and output file/
 
+# The author's own footage to run the module on, with its output files.
+input video files/
+
 # Files Python creates by itself when code runs.
 __pycache__/
 

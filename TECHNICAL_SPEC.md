@@ -437,6 +437,78 @@ Values the user may want to tune are kept in one settings place with plain names
 | Confidence thresholds | to be set from the examples | How sure a detector must be before an event is reported |
 | Analysis frame rate and size | to be set after speed tests | Trade-off between speed and accuracy |
 
+### Driver and car profiles (planned, before step 9)
+
+What a profile is and how one is chosen is in section 3 of the business spec. Here: how it is built.
+
+**Approaches considered:**
+
+| Approach | For | Against |
+|---|---|---|
+| **A. The profile replaces values in `settings` while its videos are processed** | The rules stay untouched; only `pipeline.py` and a new `profile.py` change; the check video draws the profile's thresholds without extra work | The values change behind the rules' backs, so the defaults must always be put back |
+| B. Every rule receives the profile as an input | Each function shows what it depends on | Touches every rule and most checks, for no new behaviour |
+
+**Chosen by the user: A.** `settings` is a Python module, and its values can be changed while the program runs. The rules read them at the moment they run (for example `settings.PACE_MIN_EFFORT` inside `find_pace_part`), so a changed value takes effect at once.
+
+This only works as long as every rule keeps reading `settings.NAME` when it runs. Checked when this was written: no file copies a profile value with `from pp_tt_video.settings import ...`, into a function's default value, or into another setting. New code must keep it that way. A copied value would keep the built-in number and silently ignore the profile.
+
+**New files:**
+
+- `pp_tt_video/profile.py`:
+  - `find_profile(video, profile_option)`: returns the profile file for a video, or None for the built-in values. Order: the `--profile` option; then `profile.toml` in the video's folder; then none. A `--profile` value ending in `.toml` is a path to a file; any other value is a name and means `profiles/<name>.toml` in the project folder.
+  - `load_profile(path)`: reads the file with `tomllib` (part of Python since 3.11, so nothing to install). A name that is not on the list of profile values, or a value that is not a number, stops the run for that video with a clear message. A typo must not be ignored silently, or the built-in value would be used without anyone noticing.
+  - `using_profile(profile)`: a *context manager*, used as `with using_profile(profile): ...`. It sets the profile's values in `settings` when the block starts and puts the built-in values back when it ends, also when an error happens inside it.
+- `pp_tt_video/make_profile.py`: the command `python -m pp_tt_video.make_profile "<folder>" [--name <name>] [--overwrite]`. Without `--name` it writes `profile.toml` into the folder, so the next run on that folder picks it up by itself. With `--name son` it writes `profiles/son.toml`. An existing file is not replaced without `--overwrite`.
+
+**The list of profile values** (kept in `profile.py`):
+
+| Value | Depends on | Made by `make_profile` |
+|---|---|---|
+| `PACE_MIN_EFFORT`, `PACE_HARD_FORCE` | the driver: how hard he brakes and accelerates | scaled by the braking ratio |
+| `SLIDE_MIN_CORNERING_FORCE`, `SESSION_TRACK_CORNER_FORCE` | the driver: how hard he corners | scaled by the cornering ratio |
+| `OFFTRACK_MIN_SHAKE`, `STANDSTILL_MAX_SHAKE` | the car: suspension, seat, mount | written with the built-in value, commented out, to be changed by hand |
+| `PASSING_CAR_HEIGHT`, `CLOSE_CAR_HEIGHT`, `MAX_CAR_WIDTH_FRACTION` | the camera position and lens | the same |
+
+**How `make_profile` measures** (sensors only, about 5 seconds per video):
+
+- Braking level: the 95th percentile of the pace effort (`effort_per_second(forward_force_per_second(...))`), over all seconds of all videos in the folder. The 95th percentile is the value that 5% of the seconds exceed: a typical "hard" level that ignores the slow parts (paddock, warm up) as long as the driver is at pace for more than 5% of the footage, and is not thrown by a single spike.
+- Cornering level: the 95th percentile of the sideways force per second, without its sign.
+- The user's own levels are stored in `settings.py` as `REFERENCE_EFFORT` and `REFERENCE_CORNERING`, measured once from the three examples in step P2. A first measurement gave about 2.5 and 11.
+- Ratio = driver's level / user's level; each driver value = built-in value × ratio. For the son's four videos the first measurement suggests a braking ratio of about 0.4 and a cornering ratio of about 0.55.
+- The file records the measured levels, the ratios and the video names it was made from, as comments, so it can be seen later where the numbers came from.
+
+An example of what `make_profile` writes:
+
+```toml
+# Driver and car profile, made by make_profile from 4 videos:
+# GX010179.MP4, GX010180.MP4, GX010182.MP4, GX010183.MP4
+# Braking level 0.98 (user: 2.50), ratio 0.39
+# Cornering level 6.1 (user: 11.0), ratio 0.55
+
+# --- Driver: scaled from the measurement above ---
+# Average braking or accelerating force (m/s²) from which the car counts as at pace.
+PACE_MIN_EFFORT = 0.51
+# ...
+
+# --- Car and camera: built-in values, remove the # to change one ---
+# How hard the car must shake (m/s²) to count as off the track.
+# OFFTRACK_MIN_SHAKE = 7.0
+```
+
+**In the pipeline:** for every video, `find_profile` and `load_profile` run first, then the detection (and the check video, when asked) runs inside `with using_profile(...)`. The GPS extraction, the sensor data file and the detections file do not depend on the profile. The line printed per video says which profile was used, for example `profile: son (profiles/son.toml)` or `profile: built-in values`.
+
+**On the check video:** it is drawn inside the same `using_profile` block, so every threshold line in the sensor strip and the overview picture, and the car height limits behind the box colours, are the profile's values. The profile's name is written in a corner of every picture and on the overview. See `CHECK_VIDEO_TECHNICAL_SPEC.md`.
+
+**Git:** the `profiles/` folder is ignored by Git **(assumption: profiles carry driver names, and the repository is public)**. A `profile.toml` in a video folder is outside Git anyway.
+
+**Checks:**
+
+- `find_profile`: the option wins over a folder file; a folder file is found; none gives None; a name and a path are both understood.
+- `load_profile`: an unknown name and a non-number are refused with a clear message.
+- `using_profile`: the values are set inside the block and the built-in ones are back afterwards, also after an error.
+- `make_profile`: on made-up sensor data with known levels, the ratios and the scaled values are as expected; the written file can be read back by `load_profile`.
+- Without any profile, the events files of the three examples are exactly as before.
+
 ## 9. Event type list
 
 - A CSV file with two columns: `label` and `description`.
@@ -493,6 +565,11 @@ Because it is public, anyone can read everything in it. Consequences:
 7. `sliding` and `offtrack`.
 8. `warm up` and `cooling`.
    - Added after step 7 at the user's wish: `out of session`, and a first rule for `crash`.
+   - Added before step 9 at the user's wish, because the rules fail on other footage:
+     - **P1.** Profiles: reading a profile file, choosing it (`--profile`, folder file, built-in values), applying it per video.
+     - **P2.** The `make_profile` command, with the user's reference levels measured from the three examples.
+     - **V1 to V7.** The check video, see `CHECK_VIDEO_TECHNICAL_SPEC.md`.
+     - Profiles come first **(assumption)**: they are small, and on the son's four videos they show at once whether events appear at all. The check video then shows whether they are the right ones.
 9. `obstacle`, `other event`, and the description experiment.
 
 Each step ends with something that can be run and checked, so the user can follow and learn step by step.

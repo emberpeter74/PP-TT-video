@@ -56,14 +56,23 @@ Below the picture, a strip with moving charts of the sensor values around the cu
 
 Which charts are shown is a setting.
 
-### 3.4 The overview picture **(assumption)**
+### 3.4 The profile
+
+Decided by the author: the check video is drawn **with the driver and car profile** the module used for that video (business spec section 3, "Driver and car profile").
+
+- The profile's name is shown on every picture, for example "profile: son", or "profile: built-in values" when there is none.
+- **Every threshold that is drawn is the profile's value**: the threshold lines in the sensor strip and in the overview picture, and the car sizes behind the box colours (far, close, passing). The rules decide with the profile's values, so the pictures must show the same ones.
+- The saved detections do not depend on the profile. So the same video can be drawn again with another profile in minutes, without the slow detection, to compare two profiles.
+
+### 3.5 The overview picture **(assumption)**
 
 Some problems only show over the whole video, not in a few seconds. The four new videos that came out as one long `warm up` are an example: the pace rule never fired anywhere. So besides the video, the tool writes **one picture of the whole video**:
 
 - the pace effort over time, with its thresholds,
 - the large parts (out of session, warm up, at pace, cooling, crash) as coloured bands,
 - the events, kept and thrown away, as bars,
-- the tracked cars as bars.
+- the tracked cars as bars,
+- the name of the profile used.
 
 The author did not ask for this. It is proposed because the moving strip shows only a few seconds at a time.
 
@@ -101,7 +110,7 @@ Anti-goals (would make it a failure even if it works):
 
 - A separate file holds only the settings of the check video. Every setting has a comment that says what it does and what values it takes.
 - It covers at least: which layers are drawn (kept boxes, thrown-away boxes, box details, events, thrown-away events, the strip, each chart, the threshold lines), how many seconds the strip shows, how tall the strip is, the frame rate of the check video, box smoothing on or off, and whether the overview picture is written.
-- The rules' own thresholds are **not** in this file. They stay in the module's settings, so the pictures always show the thresholds the rules really use.
+- The rules' own thresholds are **not** in this file. They stay in the module's settings and the driver and car profile, so the pictures always show the thresholds the rules really use.
 
 ## 7. Output files
 
@@ -119,7 +128,7 @@ All are written to the same folder as the other output files and skipped when th
 
 ## 8. Place in the order of work
 
-The check video is built **before step 9** (`obstacle`, `other event`). The reason: the rules already built fail on other footage, and that has to be understood before more rules are added.
+The check video is built **before step 9** (`obstacle`, `other event`), after the driver and car profiles. The reason: the rules already built fail on other footage, and that has to be understood before more rules are added.
 
 ## 9. Open questions
 

@@ -54,6 +54,24 @@ Notes:
 - The larger program takes its position and time data from a separate, more accurate GPS telemetry device, the **RaceBox Mini**.
 - GoPro files may also carry accelerometer and gyroscope data. Not yet checked for the example.
 
+### Driver and car profile
+
+Decided by the user, after five new videos came out as one long `warm up`. They were driven by the user's son, a beginner, who brakes and corners far more gently than the user: measured on the sensors, about 40% of the braking effort and 55% of the cornering force. The module's values were set on the user's own driving, so to the module the son never reached pace and every event in his sessions was dropped. The module is also meant to be used by other drivers.
+
+- **A profile says what counts as quick for one driver in one car.** It holds the values the rules compare with. Without a profile the module uses its built-in values, which are the user's own.
+- **Choosing a profile:**
+  - `--profile <name>` on the command line uses that profile for every video in the run.
+  - Otherwise, if the folder of a video holds a profile file, that profile is used for that video. **(Assumption: this also applies when single video files are given instead of a folder: the file's own folder is looked at.)**
+  - Otherwise the built-in values are used.
+  - `--profile` wins over a profile file in the folder **(assumption: a value typed on the command line is the most deliberate choice)**.
+- **Making a profile:** a separate command reads the videos in a folder and writes a profile from them. This is how a new driver starts with the tool.
+  - The values are **scaled relative to the user's own driving** (decided by the user, as a first idea to be changed if it does not work). The command measures how hard the driver typically brakes and corners in those videos, compares that with the user's examples, and scales the values that depend on the driver by the same ratio.
+  - Only values that depend on the driver are scaled: what counts as pace, the cornering force from which slides are looked for, and the cornering force that marks the last corner before leaving the track. Values that depend on the car or the camera (how hard the car shakes on a kerb, how large another car looks) cannot be measured this way; they keep the built-in values and can be changed by hand in the file.
+  - The folder must hold that driver's videos only. The command cannot tell drivers apart.
+- **The profile file is plain text** that can be read and edited by hand, with a comment on every value. It is not program code. **(Assumption: a profile may come from another driver, and a file that is program code would run as a program on this PC.)**
+- **Which profile was used is always visible:** it is printed for every video when the tool runs, and it is shown on the check video. The events file does not change: its format is fixed for the other modules.
+- Known risk: lower values mean the rules react to smaller signals, so false alarms become more likely for a gentle driver. The check video is the tool to see whether a new profile works.
+
 ## 4. What the module must detect
 
 The footage is divided into consecutive states. Normally one label applies at a time, but **labels can be combined** when two things happen at once (for example `overtaken, sliding`).
@@ -266,5 +284,7 @@ The format has no place for a confidence value or other extra fields.
 3. Are the changed descriptions of `out of session`, `warm up` and `cooling` in section 4 right?
 4. In the 09-41 example the module reports a slide at 02:47 that the hand-made file does not have. Is it a real slide?
 5. In the 12-17 example the hand-made file has `sliding` from 02:49 to 03:11. Did the slide last that long, or is a `clear` line missing?
+6. The assumptions on driver and car profiles in section 3: the video's own folder is looked at also for single files; `--profile` wins over a file in the folder; a profile is plain text, not program code.
+7. Which of the five new videos (GX010179 to GX010183) did the son drive? The sensor values suggest 179, 180, 182 and 183; GX010181 looks closer to the user's driving.
 
 Settled: the two further examples promised by the user have been provided (see section 3). The 10-32 and 12-17 recordings start in the pit exit and go straight to pace: `out of session` for a few seconds, then `clear`, no `warm up` (confirmed by the user).
