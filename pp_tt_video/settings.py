@@ -226,6 +226,20 @@ OFFTRACK_TAIL_SECONDS = 0.5
 
 OFFTRACK_LABEL = "offtrack"
 
+# --- Driver and car profiles ----------------------------------------------------
+#
+# A profile replaces some of the values above for one driver in one car (see
+# profile.py). Without a profile the values above are used: they were set on
+# the user's own driving.
+
+# A profile kept in a folder of videos has this name. It is used for every
+# video in that folder.
+PROFILE_FILE_NAME = "profile.toml"
+
+# "--profile son" means the file son.toml in this folder. The folder is not in
+# Git: profiles carry driver names, and the repository is public.
+PROFILES_FOLDER = PROJECT_FOLDER / "profiles"
+
 # File extensions that count as video files (compared in lower case).
 VIDEO_EXTENSIONS = {".mp4"}
 
