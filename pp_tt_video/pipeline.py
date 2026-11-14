@@ -6,6 +6,10 @@ hand (see __main__.py) uses the same function.
 Every video gets two files: the GPS track (.gpx) and the events file
 (-events.txt). The two are made independently: if one fails, the other is
 still written.
+
+The events are detected with the video's driver and car profile, if it has
+one (see profile.py): the one given with --profile, or the profile.toml in
+the video's folder. Otherwise the built-in values of settings.py are used.
 """
 
 import time
@@ -16,6 +20,7 @@ from pp_tt_video import settings
 from pp_tt_video.event_types import known_labels
 from pp_tt_video.events import EventsFileError, events_path_for, write_events_file
 from pp_tt_video.gps import GpsExtractionError, extract_gps, gpx_path_for
+from pp_tt_video.profile import BUILT_IN, ProfileError, profile_for_video, using_profile
 from pp_tt_video.video import VideoError
 
 
@@ -63,8 +68,11 @@ class EventsMaker:
     def __init__(self):
         self.detector = None
 
-    def make_events_file(self, video, output_folder, overwrite, on_progress=None):
-        """Detect the events and write the events file. Returns (ok, message)."""
+    def make_events_file(self, video, output_folder, overwrite, on_progress=None, profile=BUILT_IN):
+        """Detect the events and write the events file. Returns (ok, message).
+
+        The detection runs with the profile's values in force.
+        """
         events_path = events_path_for(video, output_folder)
         # Check first: detection takes minutes, and an existing file (perhaps
         # corrected by hand) must not be replaced anyway.
@@ -80,7 +88,10 @@ class EventsMaker:
 
             if self.detector is None:
                 self.detector = CarDetector()   # loading the model takes a few seconds
-            timeline = detect_timeline(video, self.detector, on_progress)
+            # Inside this block the rules see the profile's values; after
+            # it, the built-in values are back for the next video.
+            with using_profile(profile):
+                timeline = detect_timeline(video, self.detector, on_progress)
             write_events_file(events_path, timeline, known_labels(), overwrite=overwrite)
             return True, f"events written to {events_path.name}"
         except ImportError as error:
@@ -90,20 +101,31 @@ class EventsMaker:
 
 
 def process_video(video, overwrite=False, output_folder=None, events_maker=None,
-                  with_events=True, on_progress=None):
-    """Process one video and return a FileResult. Never raises an error."""
+                  with_events=True, on_progress=None, profile_option=None):
+    """Process one video and return a FileResult. Never raises an error.
+
+    profile_option: what was given with --profile, or None.
+    """
     started = time.monotonic()
     ok, message = make_gps_file(video, output_folder, overwrite)
     if with_events:
+        try:
+            profile = profile_for_video(video, profile_option)
+        except ProfileError as error:
+            # A broken profile stops the events of this video only. The GPX
+            # file is written anyway, and the run goes on with the next video.
+            return FileResult(Path(video), False, f"{message}; {error}", time.monotonic() - started)
+        message = f"{message}; profile: {profile.description}"
         events_maker = events_maker or EventsMaker()
-        events_ok, events_message = events_maker.make_events_file(video, output_folder, overwrite, on_progress)
+        events_ok, events_message = events_maker.make_events_file(
+            video, output_folder, overwrite, on_progress, profile)
         ok = ok and events_ok
         message = f"{message}; {events_message}"
     return FileResult(Path(video), ok, message, time.monotonic() - started)
 
 
 def process_videos(inputs, overwrite=False, output_folder=None, with_events=True,
-                   on_start=None, on_progress=None, on_done=None):
+                   on_start=None, on_progress=None, on_done=None, profile_option=None):
     """Process every video and return one FileResult per video.
 
     Each video is handled on its own: a failure is recorded and the run
@@ -111,6 +133,8 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
 
     output_folder: where to write the files. By default next to each video.
     with_events:   set to False to extract only the GPS tracks.
+    profile_option: a profile name or .toml file for every video (--profile);
+                    None to use each folder's profile.toml, if it has one.
 
     To follow the progress, the caller can pass three functions:
       on_start(number, total, video)     before a video is processed,
@@ -130,7 +154,7 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
             if on_progress:
                 on_progress(number, total, part)
 
-        result = process_video(video, overwrite, output_folder, events_maker, with_events, report)
+        result = process_video(video, overwrite, output_folder, events_maker, with_events, report, profile_option)
         results.append(result)
         if on_done:
             on_done(number, total, result)

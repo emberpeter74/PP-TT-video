@@ -46,6 +46,10 @@ def main():
     parser.add_argument("--overwrite", action="store_true", help="replace output files that already exist")
     parser.add_argument("--output-folder", help="write the output files here instead of next to the videos")
     parser.add_argument("--gps-only", action="store_true", help="extract only the GPS tracks, detect no events")
+    parser.add_argument(
+        "--profile",
+        help="driver and car profile: a name from the profiles folder, or a .toml file",
+    )
     arguments = parser.parse_args()
 
     results = process_videos(
@@ -53,6 +57,7 @@ def main():
         overwrite=arguments.overwrite,
         output_folder=arguments.output_folder,
         with_events=not arguments.gps_only,
+        profile_option=arguments.profile,
         on_start=show_start,
         on_progress=show_progress,
         on_done=show_done,
