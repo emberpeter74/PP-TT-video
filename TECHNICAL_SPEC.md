@@ -464,8 +464,8 @@ This only works as long as every rule keeps reading `settings.NAME` when it runs
 
 | Value | Depends on | Made by `make_profile` |
 |---|---|---|
-| `PACE_MIN_EFFORT`, `PACE_HARD_FORCE` | the driver: how hard he brakes and accelerates | scaled by the braking ratio |
-| `SLIDE_MIN_CORNERING_FORCE`, `SESSION_TRACK_CORNER_FORCE` | the driver: how hard he corners | scaled by the cornering ratio |
+| `PACE_MIN_EFFORT`, `PACE_HARD_FORCE` | the driver: how hard they brake and accelerate | scaled by the braking ratio |
+| `SLIDE_MIN_CORNERING_FORCE`, `SESSION_TRACK_CORNER_FORCE` | the driver: how hard they corner | scaled by the cornering ratio |
 | `OFFTRACK_MIN_SHAKE`, `STANDSTILL_MAX_SHAKE` | the car: suspension, seat, mount | written with the built-in value, commented out, to be changed by hand |
 | `PASSING_CAR_HEIGHT`, `CLOSE_CAR_HEIGHT`, `MAX_CAR_WIDTH_FRACTION` | the camera position and lens | the same |
 

@@ -56,7 +56,7 @@ Notes:
 
 ### Driver and car profile
 
-Decided by the user, after five new videos came out as one long `warm up`. They were driven by the user's son, a beginner, who brakes and corners far more gently than the user: measured on the sensors, about 40% of the braking effort and 55% of the cornering force. The module's values were set on the user's own driving, so to the module the son never reached pace and every event in his sessions was dropped. The module is also meant to be used by other drivers.
+Decided by the user, after four of five new videos came out as one long `warm up`. They were driven by the user's son, a beginner, who brakes and corners far more gently than the user: measured on the sensors, about 40% of the braking effort and 55% of the cornering force. The module's values were set on the user's own driving, so to the module the son never reached pace and every event in those sessions was dropped. The module is also meant to be used by other drivers.
 
 - **A profile says what counts as quick for one driver in one car.** It holds the values the rules compare with. Without a profile the module uses its built-in values, which are the user's own.
 - **Choosing a profile:**
@@ -71,6 +71,15 @@ Decided by the user, after five new videos came out as one long `warm up`. They 
 - **The profile file is plain text** that can be read and edited by hand, with a comment on every value. It is not program code. **(Assumption: a profile may come from another driver, and a file that is program code would run as a program on this PC.)**
 - **Which profile was used is always visible:** it is printed for every video when the tool runs, and it is shown on the check video. The events file does not change: its format is fixed for the other modules.
 - Known risk: lower values mean the rules react to smaller signals, so false alarms become more likely for a gentle driver. The check video is the tool to see whether a new profile works.
+
+**Footage for trying profiles** (provided by the user, not in Git), in `input video files/`, one folder per driver as the profile rules expect:
+
+| Folder | Driver | Videos | Braking level / cornering level (first measurement; the user's examples: about 2.5 / 11) |
+|---|---|---|---|
+| `practice driver` | the user's son, a beginner | GX010179, GX010180, GX010182, GX010183 | 0.7 to 1.1 / 4.6 to 6.5 |
+| `stronger driver` | the user | GX010181 | 2.1 / 9.8 |
+
+These videos have no hand-made events files, so results on them are judged by watching, not counted with the comparison tool.
 
 ## 4. What the module must detect
 
@@ -285,6 +294,5 @@ The format has no place for a confidence value or other extra fields.
 4. In the 09-41 example the module reports a slide at 02:47 that the hand-made file does not have. Is it a real slide?
 5. In the 12-17 example the hand-made file has `sliding` from 02:49 to 03:11. Did the slide last that long, or is a `clear` line missing?
 6. The assumptions on driver and car profiles in section 3: the video's own folder is looked at also for single files; `--profile` wins over a file in the folder; a profile is plain text, not program code.
-7. Which of the five new videos (GX010179 to GX010183) did the son drive? The sensor values suggest 179, 180, 182 and 183; GX010181 looks closer to the user's driving.
 
 Settled: the two further examples promised by the user have been provided (see section 3). The 10-32 and 12-17 recordings start in the pit exit and go straight to pace: `out of session` for a few seconds, then `clear`, no `warm up` (confirmed by the user).
