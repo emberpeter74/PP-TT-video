@@ -213,12 +213,25 @@ SLIDING_LABEL = "sliding"
 # The shaking of the car is measured this often.
 OFFTRACK_SAMPLES_PER_SECOND = 5
 
-# Off the tarmac the up-and-down force jumps around at least this much
-# (m/s²). On the track it is about 2.5, on a kerb 5 to 6.
-OFFTRACK_MIN_SHAKE = 7.0
+# Before the shake is measured, every measurement is averaged with the ones
+# that follow it, this many in all. A camera on its mount can vibrate about
+# 87 times per second; at about 200 measurements per second, the average of
+# 4 (a fiftieth of a second) cancels that out and keeps the slower bumps of
+# rough ground. 1 switches the smoothing off.
+OFFTRACK_SMOOTHING_MEASUREMENTS = 4
 
-# The shaking must last at least this long.
-OFFTRACK_MIN_SECONDS = 1.0
+# Off the tarmac the smoothed up-and-down force jumps around at least this
+# much (m/s²). Measured: normal driving about 1.0, the camera's vibration
+# 1.7, wheels just off the track for a moment 2.3 to 3.5, the whole car off
+# the track 5 to 7.
+# This and the next value are set to find the short excursion as well.
+# The stricter pair, 3.5 here and 1.0 seconds below, finds only the car
+# that is off the track with all wheels.
+OFFTRACK_MIN_SHAKE = 2.2
+
+# The shaking must last at least this long. Counted in whole pieces of the
+# size set above: 1.2 seconds are 6 pieces.
+OFFTRACK_MIN_SECONDS = 1.2
 
 # "offtrack" starts this long before the shaking and ends this long after.
 OFFTRACK_LEAD_SECONDS = 1.5

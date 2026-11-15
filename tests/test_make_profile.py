@@ -103,7 +103,7 @@ class ProfileTextTest(unittest.TestCase):
         })
         self.assertIn("a.MP4", text)
         # The car and camera values are there to be switched on by hand.
-        self.assertIn("# OFFTRACK_MIN_SHAKE = 7.0", text)
+        self.assertIn(f"# OFFTRACK_MIN_SHAKE = {settings.OFFTRACK_MIN_SHAKE}", text)
 
 
 def fake_read(video):

@@ -95,12 +95,12 @@ A window of `STRIP_SECONDS_BEFORE` and `STRIP_SECONDS_AFTER` around the current 
 | Pace | forward force per second; pace effort | `PACE_MIN_EFFORT`, `PACE_HARD_FORCE` | `forward_force_per_second`, `effort_per_second` |
 | Sliding | cornering force; marks at catch moments | `±SLIDE_MIN_CORNERING_FORCE` | `cornering_and_turning`, `find_catch_times` |
 | Turning | turning rate; the same marks | `±SLIDE_MIN_TURNING_BEFORE` | `cornering_and_turning`, `find_catch_times` |
-| Offtrack | shake up and down (the rule's); shake sideways and forward (information only) | `OFFTRACK_MIN_SHAKE` | `shake_over_time` |
+| Offtrack | shake up and down after smoothing (the rule's) | `OFFTRACK_MIN_SHAKE` | `shake_over_time` |
 
 As built (step V5, `charts.py`):
 
 - **Turning is a chart of its own.** It is measured in radians per second (about ±0.5), the cornering force in m/s² (about ±11): on one scale the turning line would be flat.
-- **The offtrack chart has two extra lines, for information only:** the shake sideways and forward. The rule does not use them. Added after step P2: the false offtracks on the son's footage shake up and down only, the real ones in every direction, and the rework of the rule needs to see that.
+- **The offtrack chart shows one line: the smoothed shake the rule decides on.** Until the rework of the offtrack rule it also had the shake sideways and forward, for information: they were there to find out what separates the false offtracks on the son's footage from real ones. The answer was the speed of the shaking, not its direction (see "Rework of the offtrack rule" in `TECHNICAL_SPEC.md`), so they are gone.
 - **Each chart has one fixed scale for the whole video**, so a value has the same height at every moment: up to twice its largest threshold, or the level only 0.5% of its values exceed, whichever is more. Values beyond the scale are drawn at the edge. The largest value is not used: one jolt would flatten everything else.
 - The charts are made inside `explain`, so inside `using_profile`: their thresholds are the profile's.
 

@@ -83,9 +83,8 @@ SHOW_STRIP = True
 #               the car must have turned into the corner faster than the
 #               threshold.
 #   "offtrack"  how hard the car shakes up and down (thick yellow line), with
-#               its threshold. The two thin lines are the shake sideways
-#               (green) and forward (brown): shown for information, the rule
-#               does not use them.
+#               its threshold. Only slow shaking is in it: a fast vibration
+#               of the camera is smoothed away first, as the rule does.
 STRIP_CHARTS = ["pace", "sliding", "turning", "offtrack"]
 
 # True: the rules' thresholds are drawn as dashed lines, with their value.

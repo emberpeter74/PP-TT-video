@@ -325,7 +325,7 @@ The rule, looking 10 times per second:
 4. This holds in at least 2 samples close together.
 5. `sliding` starts 2 seconds before the catch and ends with it.
 
-**Offtrack (`offtrack.py`): shaking.** The "shake" is how much the up-and-down force jumps around within a fifth of a second (its standard deviation). On the track it is about 2.5 m/s², on a kerb 5 to 6, on grass or gravel 9 to 13. The rule: a shake of at least 7 for at least 1 second. `offtrack` starts 1.5 seconds before the shaking and ends 0.5 seconds after it.
+**Offtrack (`offtrack.py`): slow shaking.** The "shake" is how much the up-and-down force jumps around within a fifth of a second (its standard deviation), measured after smoothing: every measurement is first averaged with the three that follow it. The rule: a shake of at least 2.2 m/s² for at least 1.2 seconds (6 pieces of a fifth of a second; the pieces are counted, the times are not compared). `offtrack` starts 1.5 seconds before the shaking and ends 0.5 seconds after it. This is the rule as reworked after the check video; the step 7 rule (no smoothing, at least 7 for 1 second) and why it was replaced are under "Rework of the offtrack rule" below.
 
 All values are in `settings.py`.
 
@@ -333,7 +333,7 @@ Result on the examples, at pace:
 
 | Example | Marked by hand | Found | Missed | Extra |
 |---|---|---|---|---|
-| 09-41 | 4 sliding, 2 offtrack | 4 sliding, 1 offtrack (11:15) | offtrack at 02:31 | sliding at 02:47 |
+| 09-41 | 4 sliding, 2 offtrack | 4 sliding, 2 offtrack (02:30, 11:15) | none | sliding at 02:47 |
 | 10-32 | 4 sliding | 4 sliding | none | none |
 | 12-17 | 2 sliding | 2 sliding | none | none |
 
@@ -341,9 +341,9 @@ Notes:
 
 - **All 10 marked slides are found**, each within 2 seconds of the marked start.
 - **The extra slide at 02:47 in 09-41** shows the same catch as the others, only shorter. Whether it is a real slide the hand-made file leaves out is for the user to check in the video.
-- **The missed offtrack at 02:31 in 09-41** shakes the car at 5 to 7 m/s² for about a second, which is what a kerb does. Lowering the limit to catch it would report kerbs in all three videos. It stays missed: a false alarm is worse than a missed event. The picture (grass under the car) may be able to tell them apart later.
+- **The offtrack at 02:31 in 09-41** was missed by the step 7 rule: without smoothing it shakes the car at 5 to 7 m/s² for about a second, which is what a kerb does. The reworked rule finds it (02:30.5 to 02:33.9; marked by hand 02:31 to 02:33).
 - **In 12-17 the hand-made file has `sliding` from 02:49 to 03:11**, 22 seconds, directly followed by `held up`. The module reports the slide from 02:48 to 02:51 and `clear` after it. The comparison tool counts this as found.
-- The paddock and the pit lane shake the car as much as grass does (three places in 09-41, one in 10-32). They fall into `warm up` or `cooling` and are dropped there.
+- With the step 7 rule the paddock and the pit lane were reported too (three places in 09-41, one in 10-32) and dropped as `warm up` or `cooling`. The reworked rule does not report them in the first place.
 
 Limits:
 
@@ -404,7 +404,7 @@ Limits:
 | `overtaken` | **Built in step 6:** a tracked car appears large and then shrinks. Start time is moved 3 seconds earlier. | Good on the examples |
 | `held up` | **Built in step 6:** a tracked car stays close ahead for at least 3 seconds. | Medium: size alone does not always match the user's judgement |
 | `sliding` | **Built in step 7** (see above): the car keeps its cornering force but turns against the corner. | Good on the examples, for slides that are caught |
-| `offtrack` | **Built in step 7:** hard up-and-down shaking for a second or more. The picture is not used yet. | Medium: finds clear cases, misses two wheels on the grass |
+| `offtrack` | **Built in step 7, reworked after the check video:** slow, hard up-and-down shaking for over a second. The picture is not used yet. | Good on the eight videos we have; the two numbers are fitted to only two real offtracks |
 | `warm up`, `cooling` | **Built in step 8** (see above): how hard the car brakes and accelerates, from the accelerometer. Not from speed. | Good on the examples |
 | `out of session` | **Built** (see above): slow at the start of the video until the car has accelerated onto the track; after the last real corner before the car parks. | Medium: fits the three examples, values are track-dependent |
 | `crash` | **First rule built** (see above): the car stands still within a minute after driving at pace. Collisions after which the car drives on are open. | Medium: one example |
@@ -492,7 +492,7 @@ PACE_MIN_EFFORT = 0.5
 
 # --- Car and camera: built-in values, remove the # to change one ---
 # How hard the car must shake (m/s²) to count as off the track.
-# OFFTRACK_MIN_SHAKE = 7.0
+# OFFTRACK_MIN_SHAKE = 2.2
 ```
 
 **In the pipeline:** for every video, `find_profile` and `load_profile` run first, then the detection (and the check video, when asked) runs inside `with using_profile(...)`. The GPS extraction, the sensor data file and the detections file do not depend on the profile. The line printed per video says which profile was used, for example `profile: son (profiles/son.toml)` or `profile: built-in values`.
@@ -542,10 +542,56 @@ What the sensors show (shake = standard deviation within a fifth of a second, m/
 - The false alarms shake up and down only, at a steady rhythm of about 87 per second: a vibration, not rough ground. Probable cause, not proven: the engine at certain revs makes the camera mount vibrate; a gentle driver stays in that rev range for more than the one second the rule needs.
 - The up-and-down shake alone cannot separate them: it is about 10 for the false alarms and for the real offtrack.
 - How much the camera shakes in each direction differs between the two drivers' footage, so one fixed threshold on one direction cannot suit both. "Also require sideways shake" was considered and dropped: in the user's own videos the sideways shake is high nearly all the time at pace.
-- Both real offtracks stand out against their own video's normal level in the sideways and forward directions. A rule on "unusual for this video" may work; untested, and there are only two real examples.
+- Both real offtracks stand out against their own video's normal level in the sideways and forward directions. A rule on "unusual for this video" looked possible at this point; it was tried in the rework and dropped (see below).
 - Raising `OFFTRACK_MIN_SHAKE` in the son's profile is no fix: it would miss real offtracks just the same.
 
 Decided by the user: the offtrack rule is reworked **after** the check video is built, with the check video as the tool.
+
+### Rework of the offtrack rule (done)
+
+The design is in `docs/superpowers/specs/2026-11-15-offtrack-rework-design.md`.
+
+**What separates the false alarms from rough ground is speed.** The camera's vibration goes up and down about 87 times per second; rough ground throws the car about more slowly. If every measurement is averaged with the three that follow it (four measurements are about a fiftieth of a second), the vibration cancels out and the slower bumps stay. The "smoothed shake" is the shake of these averages.
+
+| Moment | Shake without smoothing (old threshold 7) | Smoothed shake (new threshold 2.2) |
+|---|---|---|
+| False alarm, GX010183 at 08:11 | 10.4 | 1.7 |
+| Real offtrack, 09-41 at 11:17 | 10 to 13 | 5.3 to 7.1 |
+| Short offtrack, 09-41 at 02:32 | 5.3 to 6.7 | 2.3 to 3.5 |
+| Normal driving, the user's videos | about 2.5 | about 1.0 |
+
+**The rule as built:** smoothed shake of at least 2.2 m/s² (`OFFTRACK_MIN_SHAKE`) in at least 6 pieces of a fifth of a second in a row (`OFFTRACK_MIN_SECONDS = 1.2`), smoothing over 4 measurements (`OFFTRACK_SMOOTHING_MEASUREMENTS`; 1 switches it off). Chosen by the user: the sensitive pair of numbers, which also finds the short offtrack.
+
+- The length is counted in pieces. Comparing times (`last + step - first >= 1.2`) depends on rounding: the same six pieces passed or failed depending on where in the second they started.
+- A piece with fewer measurements than the smoothing needs counts as calm (shake 0). Without smoothing, normal driving (about 2.5) lies above the new threshold.
+- The smoothing is done inside each piece, never across two.
+
+**Result on all eight videos (119 minutes, sensors only):**
+
+| Video | Old rule | Reworked rule |
+|---|---|---|
+| 09-41 | 4 (1 at pace: 11:15) | 2: 02:30.5 to 02:33.9 and 11:15.2 to 11:20.0, both marked by hand |
+| 10-32 | 1 (08:14, outside the part at pace) | none |
+| 12-17 | none | none |
+| GX010181 (the user) | 1 (08:38) | none |
+| GX010179, 180, 182, 183 (the son) | 6, 13, 12, 19 | none |
+
+Both offtracks in 09-41 lie in the part at pace and are kept (`cooling` starts at 11:21.7). The two real ones are runs of 7 and 14 pieces. The only near miss is at 02:12.7 in 12-17: 5 pieces in a row, one short. It has not been judged in the video. Runs of 4 pieces: one each in 10-32, GX010179 and GX010180, two in 12-17.
+
+**What this result does and does not prove.** "None" is proof only where someone looked. The user watched the whole of GX010183 (the car never left the track) and marked the three examples by hand. Nobody has watched GX010179, 180 and 182 for offtracks, and GX010181 has no hand-made file: the old rule's hit there at 08:38 to 08:43 is gone and has not been judged.
+
+**Known risk.** The two numbers are fitted to two real offtracks, and the short one lasts 1.4 seconds against the 1.2 needed. New footage may need them moved. The stricter pair is 3.5 m/s² for 1.0 seconds: it finds the offtrack at 11:15 only, with a wide margin. Changing between the two is two numbers in `settings.py`.
+
+**Considered and dropped:**
+
+| Approach | Result | 
+|---|---|
+| Shake forward or sideways instead of up and down | 10 to 60 hits per video on the user's footage |
+| The rotation sensor | hundreds of hits per video |
+| "Unusual for this video" | the son's normal level is half the user's: their kerbs would be reported |
+| A higher `OFFTRACK_MIN_SHAKE` in the son's profile | would miss real offtracks just the same |
+
+**Profiles.** `OFFTRACK_MIN_SHAKE` stays a value a profile may set. A profile written before the rework shows the old built-in value 7.0 in a comment line (it is not in force, the line is commented out). A profile that sets the value by hand to something on the old scale would now find nothing: such a profile must be made again.
 
 ## 9. Event type list
 
@@ -608,7 +654,7 @@ Because it is public, anyone can read everything in it. Consequences:
      - **P2.** (done) The `make_profile` command, with the user's reference levels measured from the three examples.
      - **V1 to V7.** The check video, see `CHECK_VIDEO_TECHNICAL_SPEC.md`.
      - Profiles came first: they are small, and on the son's four videos they showed at once that a part at pace is found. **P1 and P2 are done.**
-     - After the check video: rework the offtrack rule, which gives false alarms on the son's footage (see "Driver and car profiles", result of step P2). Decided by the user.
+     - After the check video: rework the offtrack rule, which gave false alarms on the son's footage (see "Rework of the offtrack rule"). Decided by the user. **Done** (the rule; the check video's chart follows).
 9. `obstacle`, `other event`, and the description experiment.
 
 Each step ends with something that can be run and checked, so the user can follow and learn step by step.

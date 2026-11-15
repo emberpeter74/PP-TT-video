@@ -114,22 +114,13 @@ def turning_chart(sensor_seconds):
 def offtrack_chart(sensor_seconds):
     """What the offtrack rule looks at: how hard the car shakes up and down.
 
-    Two more lines are shown for information: the shake sideways and
-    forward. The rule does not use them. They are here because a vibration
-    of the camera shakes up and down only, while rough ground shakes the car
-    in every direction.
+    The shake is measured after smoothing, so a fast vibration of the
+    camera does not show in it (see offtrack.py).
     """
-    def line(name, axis, from_rule):
-        samples = shake_over_time(sensor_seconds, axis)
-        return Line(name, [time for time, _ in samples], [shake for _, shake in samples], from_rule)
-
+    samples = shake_over_time(sensor_seconds)
     return with_scale(Chart(
         title="offtrack",
-        lines=[
-            line("shake", settings.ACCELERATION_AXIS_DOWN, True),
-            line("shake sideways", settings.ACCELERATION_AXIS_SIDEWAYS, False),
-            line("shake forward", settings.ACCELERATION_AXIS_FORWARD, False),
-        ],
+        lines=[Line("shake", [time for time, _ in samples], [shake for _, shake in samples], True)],
         thresholds=[("min", settings.OFFTRACK_MIN_SHAKE)],
         marks=[],
     ))

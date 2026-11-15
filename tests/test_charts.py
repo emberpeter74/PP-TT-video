@@ -26,9 +26,12 @@ def racing(seconds=120):
 
 
 def second_of(start, sideways, turning, down=(-9.8,) * 10):
-    """One second of ten measurements with the given cornering force and turning rate."""
+    """One second with the given cornering force and turning rate.
+
+    down: the up-and-down force of every measurement (ten, unless given).
+    """
     acceleration = [(value, sideways, 0.0) for value in down]
-    rotation = [(turning, 0.0, 0.0)] * 10   # axis 0 is the turning rate
+    rotation = [(turning, 0.0, 0.0)] * len(down)   # axis 0 is the turning rate
     return SensorSecond(float(start), acceleration, rotation)
 
 
@@ -91,37 +94,26 @@ class SlidingChartsTest(unittest.TestCase):
 
 class OfftrackChartTest(unittest.TestCase):
     def setUp(self):
-        # Second 1 shakes up and down only: the axis of gravity jumps
-        # between -4.8 and -14.8, the other two axes are still.
-        self.data = [second_of(0, 0.0, 0.0), second_of(1, 0.0, 0.0, down=(-4.8, -14.8) * 5), second_of(2, 0.0, 0.0)]
+        # Second 1 shakes slowly up and down, as rough ground does: ten
+        # measurements at -4.8, ten at -14.8, a hundred per second.
+        rough = ((-4.8,) * 10 + (-14.8,) * 10) * 5
+        calm = (-9.8,) * 100
+        self.data = [second_of(0, 0.0, 0.0, down=calm), second_of(1, 0.0, 0.0, down=rough),
+                     second_of(2, 0.0, 0.0, down=calm)]
         self.chart = offtrack_chart(self.data)
 
-    def test_one_rule_line_and_two_information_lines(self):
-        self.assertEqual([(line.name, line.from_rule) for line in self.chart.lines],
-                         [("shake", True), ("shake sideways", False), ("shake forward", False)])
+    def test_one_rule_line(self):
+        self.assertEqual([(line.name, line.from_rule) for line in self.chart.lines], [("shake", True)])
 
     def test_rule_line_is_what_the_rule_measures(self):
         shake = line_named(self.chart, "shake")
         self.assertEqual(list(zip(shake.times, shake.values)), shake_over_time(self.data))
-        self.assertEqual(max(shake.values), 5.0)   # jumping 5 either side of its average
-
-    def test_information_lines_show_the_other_directions(self):
-        self.assertEqual(max(line_named(self.chart, "shake sideways").values), 0.0)
-        self.assertEqual(max(line_named(self.chart, "shake forward").values), 0.0)
+        self.assertGreater(max(shake.values), 1.0)
 
     def test_threshold_follows_the_profile(self):
         self.assertEqual(self.chart.thresholds, [("min", settings.OFFTRACK_MIN_SHAKE)])
         with using_profile(Profile("x", None, {"OFFTRACK_MIN_SHAKE": 3.5})):
             self.assertEqual(offtrack_chart(self.data).thresholds, [("min", 3.5)])
-
-
-class ShakeAxisTest(unittest.TestCase):
-    def test_shake_of_another_axis(self):
-        # Shaking sideways only: nothing for the rule, which looks up and down.
-        shaking = [SensorSecond(0.0, [(-9.8, 3.0, 0.0), (-9.8, -3.0, 0.0)] * 5, [(0.0, 0.0, 0.0)] * 10)]
-        self.assertEqual({shake for _, shake in shake_over_time(shaking)}, {0.0})
-        sideways = shake_over_time(shaking, settings.ACCELERATION_AXIS_SIDEWAYS)
-        self.assertEqual({shake for _, shake in sideways}, {3.0})
 
 
 class ScaleTest(unittest.TestCase):

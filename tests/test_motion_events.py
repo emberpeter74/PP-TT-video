@@ -1,10 +1,11 @@
 """Checks for the events found from the motion sensors: sliding and offtrack."""
 
 import unittest
+from unittest import mock
 
 from pp_tt_video import settings
 from pp_tt_video.detect_events import combine_stretches
-from pp_tt_video.offtrack import detect_offtrack, offtrack_stretches
+from pp_tt_video.offtrack import detect_offtrack, offtrack_stretches, shake_over_time, smoothed
 from pp_tt_video.sensors import SensorSecond, pieces_of_seconds, read_sensors
 from pp_tt_video.sliding import detect_sliding, find_catch_times, slide_stretches
 from pp_tt_video.stretch import Stretch
@@ -71,31 +72,94 @@ class SlidingTest(unittest.TestCase):
         self.assertEqual(slide_stretches(samples), [])
 
 
+# Up-and-down values, repeated to fill a second of 200 measurements.
+FAST = [12, -12]              # changes with every measurement: the camera's vibration
+SLOW = [6] * 10 + [-6] * 10   # ten measurements up, ten down: rough ground
+
+
+class SmoothedTest(unittest.TestCase):
+    def test_smoothed_averages_neighbours(self):
+        self.assertEqual(smoothed([1, 2, 3, 4, 5], 2), [1.5, 2.5, 3.5, 4.5])
+
+    def test_smoothing_of_one_changes_nothing(self):
+        for count in (1, 0, -3):
+            self.assertEqual(smoothed([1, 2, 3], count), [1, 2, 3])
+
+    def test_too_few_values_are_left_alone(self):
+        self.assertEqual(smoothed([1, 2], 4), [1, 2])
+
+
 class OfftrackTest(unittest.TestCase):
-    def shakes(self, values):
-        return [(100.0 + position / 5, value) for position, value in enumerate(values)]
+    def shakes(self, values, start=100.0):
+        return [(start + position / 5, value) for position, value in enumerate(values)]
+
+    def seconds_of(self, pattern, count=3, measurements=200):
+        """Seconds in which the up-and-down force follows the pattern, over and over."""
+        down = [pattern[i % len(pattern)] for i in range(measurements)]
+        return [SensorSecond(float(n), [(-9.8 + d, 0, 0) for d in down], [(0, 0, 0)] * measurements)
+                for n in range(count)]
 
     def test_long_hard_shaking_is_offtrack(self):
         # 2 seconds of hard shaking, starting at 102.0 s.
-        stretches = offtrack_stretches(self.shakes([2.5] * 10 + [11.0] * 10 + [2.5] * 10))
+        stretches = offtrack_stretches(self.shakes([1.0] * 10 + [5.0] * 10 + [1.0] * 10))
         self.assertEqual([stretch.label for stretch in stretches], ["offtrack"])
         self.assertAlmostEqual(stretches[0].start, 102.0 - settings.OFFTRACK_LEAD_SECONDS)
         self.assertAlmostEqual(stretches[0].end, 104.0 + settings.OFFTRACK_TAIL_SECONDS)
 
     def test_kerb_is_not_offtrack(self):
-        # A kerb: strong but short, and not as strong as grass.
-        self.assertEqual(offtrack_stretches(self.shakes([2.5] * 10 + [6.0] * 4 + [2.5] * 10)), [])
+        # A kerb: short, and not as rough as grass.
+        self.assertEqual(offtrack_stretches(self.shakes([1.0] * 10 + [1.8] * 4 + [1.0] * 10)), [])
 
     def test_short_hard_bump_is_not_offtrack(self):
-        self.assertEqual(offtrack_stretches(self.shakes([2.5] * 10 + [12.0] * 2 + [2.5] * 10)), [])
+        self.assertEqual(offtrack_stretches(self.shakes([1.0] * 10 + [6.0] * 2 + [1.0] * 10)), [])
 
-    def test_shake_is_measured_from_the_up_and_down_force(self):
-        # One second: calm in the first half, jumping up and down in the second.
-        calm = [(-9.8, 0, 0)] * 100
-        rough = [(-9.8 + 12, 0, 0), (-9.8 - 12, 0, 0)] * 50
-        seconds = [SensorSecond(float(n), rough, [(0, 0, 0)] * 200) for n in range(3)]
-        seconds.insert(0, SensorSecond(-1.0, calm, [(0, 0, 0)] * 100))
-        self.assertEqual([stretch.label for stretch in detect_offtrack(seconds)], ["offtrack"])
+    def test_shaking_just_under_the_time_is_not_offtrack(self):
+        # Five pieces are 1.0 second, six are 1.2 seconds.
+        self.assertEqual(offtrack_stretches(self.shakes([1.0] * 10 + [4.0] * 5 + [1.0] * 10)), [])
+        self.assertEqual(len(offtrack_stretches(self.shakes([1.0] * 10 + [4.0] * 6 + [1.0] * 10))), 1)
+
+    def test_six_pieces_are_enough_wherever_they_start(self):
+        # Times like 100.6 cannot be stored exactly; the answer must not depend on that.
+        for start in (100.0, 100.2, 100.4, 100.6, 100.8):
+            with self.subTest(start=start):
+                six = self.shakes([1.0] * 3 + [4.0] * 6 + [1.0] * 3, start)
+                five = self.shakes([1.0] * 3 + [4.0] * 5 + [1.0] * 3, start)
+                self.assertEqual(len(offtrack_stretches(six)), 1)
+                self.assertEqual(offtrack_stretches(five), [])
+
+    def test_shaking_until_the_end_of_the_video_is_reported(self):
+        self.assertEqual(len(offtrack_stretches(self.shakes([1.0] * 10 + [4.0] * 10))), 1)
+
+    def test_fast_vibration_is_not_offtrack(self):
+        seconds = self.seconds_of(FAST)
+        self.assertEqual(detect_offtrack(seconds), [])
+        for _, shake in shake_over_time(seconds):
+            self.assertLess(shake, 0.1)
+
+    def test_fast_vibration_shows_without_smoothing(self):
+        for _, shake in shake_over_time(self.seconds_of(FAST), smoothing=1):
+            self.assertAlmostEqual(shake, 12.0)
+
+    def test_slow_rough_shaking_is_offtrack(self):
+        stretches = detect_offtrack(self.seconds_of(SLOW))
+        self.assertEqual([stretch.label for stretch in stretches], ["offtrack"])
+
+    def test_smoothing_setting_is_read_when_the_rule_runs(self):
+        with mock.patch.object(settings, "OFFTRACK_SMOOTHING_MEASUREMENTS", 1):
+            self.assertEqual(len(detect_offtrack(self.seconds_of(FAST))), 1)
+
+    def test_smoothing_of_zero_or_less_means_no_smoothing(self):
+        for count in (0, -2):
+            with mock.patch.object(settings, "OFFTRACK_SMOOTHING_MEASUREMENTS", count):
+                for _, shake in shake_over_time(self.seconds_of(FAST)):
+                    self.assertAlmostEqual(shake, 12.0)
+
+    def test_piece_with_few_measurements_counts_as_calm(self):
+        # A camera that measures 10 times per second: 2 measurements per
+        # piece, too few to smooth. Unsmoothed, this would be a false alarm.
+        seconds = self.seconds_of(FAST, measurements=10)
+        self.assertEqual({shake for _, shake in shake_over_time(seconds)}, {0.0})
+        self.assertEqual(detect_offtrack(seconds), [])
 
 
 class OutsidePaceTest(unittest.TestCase):
@@ -117,6 +181,21 @@ class ExampleTest(unittest.TestCase):
         self.assertEqual(len(stretches), len(marked))
         for stretch, start in zip(stretches, marked):
             self.assertAlmostEqual(stretch.start, start, delta=settings.TIME_TOLERANCE_SECONDS)
+
+
+@unittest.skipUnless(EXAMPLE_VIDEO.is_file(), "example videos not on this PC")
+class OfftrackOnExamplesTest(unittest.TestCase):
+    def starts(self, name):
+        return [stretch.start for stretch in detect_offtrack(read_sensors(EXAMPLE_FOLDER / name))]
+
+    def test_09_41_has_its_two_offtracks(self):
+        first, second = self.starts("RaceBox Track Sessionon 30-05-2026 09-41.MP4")
+        self.assertAlmostEqual(first, 151, delta=2)    # 02:31 in the hand-made file
+        self.assertAlmostEqual(second, 675, delta=2)   # 11:15
+
+    def test_the_other_examples_have_none(self):
+        for name in ("RaceBox Track Sessionon 30-05-2026 10-32.MP4", "RaceBox Track Sessionon 30-05-2026 12-17.MP4"):
+            self.assertEqual(self.starts(name), [])
 
 
 if __name__ == "__main__":
