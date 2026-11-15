@@ -437,7 +437,7 @@ Values the user may want to tune are kept in one settings place with plain names
 | Confidence thresholds | to be set from the examples | How sure a detector must be before an event is reported |
 | Analysis frame rate and size | to be set after speed tests | Trade-off between speed and accuracy |
 
-### Driver and car profiles (planned, before step 9)
+### Driver and car profiles (built in steps P1 and P2)
 
 What a profile is and how one is chosen is in section 3 of the business spec. Here: how it is built.
 
@@ -473,8 +473,8 @@ This only works as long as every rule keeps reading `settings.NAME` when it runs
 
 - Braking level: the 95th percentile of the pace effort (`effort_per_second(forward_force_per_second(...))`), over all seconds of all videos in the folder. The 95th percentile is the value that 5% of the seconds exceed: a typical "hard" level that ignores the slow parts (paddock, warm up) as long as the driver is at pace for more than 5% of the footage, and is not thrown by a single spike.
 - Cornering level: the 95th percentile of the sideways force per second, without its sign.
-- The user's own levels are stored in `settings.py` as `REFERENCE_EFFORT` and `REFERENCE_CORNERING`, measured once from the three examples in step P2. A first measurement gave about 2.5 and 11.
-- Ratio = driver's level / user's level; each driver value = built-in value × ratio. For the son's four videos the first measurement suggests a braking ratio of about 0.4 and a cornering ratio of about 0.55.
+- The user's own levels are stored in `settings.py` as `REFERENCE_EFFORT` and `REFERENCE_CORNERING`, measured in step P2 on the three examples together: 2.61 and 10.92.
+- Ratio = driver's level / user's level; each driver value = built-in value × ratio.
 - The file records the measured levels, the ratios and the video names it was made from, as comments, so it can be seen later where the numbers came from.
 
 An example of what `make_profile` writes:
@@ -482,12 +482,12 @@ An example of what `make_profile` writes:
 ```toml
 # Driver and car profile, made by make_profile from 4 videos:
 # GX010179.MP4, GX010180.MP4, GX010182.MP4, GX010183.MP4
-# Braking level 0.98 (user: 2.50), ratio 0.39
-# Cornering level 6.1 (user: 11.0), ratio 0.55
+# Braking level 1.01 (reference driver: 2.61), ratio 0.39
+# Cornering level 5.98 (reference driver: 10.92), ratio 0.55
 
 # --- Driver: scaled from the measurement above ---
 # Average braking or accelerating force (m/s²) from which the car counts as at pace.
-PACE_MIN_EFFORT = 0.51
+PACE_MIN_EFFORT = 0.5
 # ...
 
 # --- Car and camera: built-in values, remove the # to change one ---
@@ -508,6 +508,44 @@ PACE_MIN_EFFORT = 0.51
 - `using_profile`: the values are set inside the block and the built-in ones are back afterwards, also after an error.
 - `make_profile`: on made-up sensor data with known levels, the ratios and the scaled values are as expected; the written file can be read back by `load_profile`.
 - Without any profile, the events files of the three examples are exactly as before.
+
+**Result of step P2** (measured with `make_profile`, sensors only):
+
+| Footage | Braking level | Cornering level | Ratios to the reference |
+|---|---|---|---|
+| The three examples (the reference) | 2.61 | 10.92 | 1 / 1 |
+| The user, GX010181 | 1.98 | 9.75 | 0.76 / 0.89 |
+| The son, four videos together | 1.01 | 5.98 | 0.39 / 0.55 |
+
+The son's profile sets `PACE_MIN_EFFORT = 0.5`, `PACE_HARD_FORCE = 1.16`, `SLIDE_MIN_CORNERING_FORCE = 3.83` and `SESSION_TRACK_CORNER_FORCE = 2.74`. With it, the sensor rules no longer call the four videos one long `warm up`:
+
+| Video | Built-in values | With the profile |
+|---|---|---|
+| GX010179 | all `warm up` | `warm up` to 04:50, at pace, `crash` from 10:53 |
+| GX010180 | all `warm up` | `warm up` to 03:09, then at pace to the end |
+| GX010182 | all `warm up` | at pace for the whole video |
+| GX010183 | all `warm up` | at pace for the whole video |
+
+Not yet judged: whether the whole of 182 and 183 really is at pace, and whether the `crash` in 179 is a stop in the pits. The full detection (with the car rules) was **not** run on these videos, because of the finding below.
+
+**Found in step P2: the offtrack rule gives false alarms on the son's footage.** With the part at pace found, the `offtrack` stretches inside it are kept: 6, 13, 12 and 19 in the four videos. The user watched the whole of GX010183: all 19 are false, the car never left the track (once or twice it was on a kerb).
+
+What the sensors show (shake = standard deviation within a fifth of a second, m/s²):
+
+| | Up-and-down | Sideways | Forward | Rotation |
+|---|---|---|---|---|
+| The 50 false alarms in the son's videos | 8 to 12 | 2 to 4 | 4 to 6 | almost none |
+| Real offtrack, 09-41 at 11:15 (found by the rule) | 10 | 24 | 43 | strong |
+| Real offtrack, 09-41 at 02:31, right wheels about 20 cm off for a few tenths of a second (missed by the rule); visible at 02:32.6 to 02:33.0 | 6 to 7 | 18 to 20 | 28 to 31 | raised |
+| 09-41 as a whole, typical at pace | about 3 | about 8 | 10 to 20 | |
+
+- The false alarms shake up and down only, at a steady rhythm of about 87 per second: a vibration, not rough ground. Probable cause, not proven: the engine at certain revs makes the camera mount vibrate; a gentle driver stays in that rev range for more than the one second the rule needs.
+- The up-and-down shake alone cannot separate them: it is about 10 for the false alarms and for the real offtrack.
+- How much the camera shakes in each direction differs between the two drivers' footage, so one fixed threshold on one direction cannot suit both. "Also require sideways shake" was considered and dropped: in the user's own videos the sideways shake is high nearly all the time at pace.
+- Both real offtracks stand out against their own video's normal level in the sideways and forward directions. A rule on "unusual for this video" may work; untested, and there are only two real examples.
+- Raising `OFFTRACK_MIN_SHAKE` in the son's profile is no fix: it would miss real offtracks just the same.
+
+Decided by the user: the offtrack rule is reworked **after** the check video is built, with the check video as the tool.
 
 ## 9. Event type list
 
@@ -566,10 +604,11 @@ Because it is public, anyone can read everything in it. Consequences:
 8. `warm up` and `cooling`.
    - Added after step 7 at the user's wish: `out of session`, and a first rule for `crash`.
    - Added before step 9 at the user's wish, because the rules fail on other footage:
-     - **P1.** Profiles: reading a profile file, choosing it (`--profile`, folder file, built-in values), applying it per video.
-     - **P2.** The `make_profile` command, with the user's reference levels measured from the three examples.
+     - **P1.** (done) Profiles: reading a profile file, choosing it (`--profile`, folder file, built-in values), applying it per video.
+     - **P2.** (done) The `make_profile` command, with the user's reference levels measured from the three examples.
      - **V1 to V7.** The check video, see `CHECK_VIDEO_TECHNICAL_SPEC.md`.
-     - Profiles come first **(assumption)**: they are small, and on the son's four videos they show at once whether events appear at all. The check video then shows whether they are the right ones.
+     - Profiles came first: they are small, and on the son's four videos they showed at once that a part at pace is found. **P1 and P2 are done.**
+     - After the check video: rework the offtrack rule, which gives false alarms on the son's footage (see "Driver and car profiles", result of step P2). Decided by the user.
 9. `obstacle`, `other event`, and the description experiment.
 
 Each step ends with something that can be run and checked, so the user can follow and learn step by step.

@@ -74,12 +74,16 @@ Decided by the user, after four of five new videos came out as one long `warm up
 
 **Footage for trying profiles** (provided by the user, not in Git), in `input video files/`, one folder per driver as the profile rules expect:
 
-| Folder | Driver | Videos | Braking level / cornering level (first measurement; the user's examples: about 2.5 / 11) |
+| Folder | Driver | Videos | Braking level / cornering level (the user's three examples: 2.61 / 10.92) |
 |---|---|---|---|
-| `practice driver` | the user's son, a beginner | GX010179, GX010180, GX010182, GX010183 | 0.7 to 1.1 / 4.6 to 6.5 |
-| `stronger driver` | the user | GX010181 | 2.1 / 9.8 |
+| `practice driver` | the user's son, a beginner | GX010179, GX010180, GX010182, GX010183 | 1.01 / 5.98 |
+| `stronger driver` | the user | GX010181 | 1.98 / 9.75 |
 
 These videos have no hand-made events files, so results on them are judged by watching, not counted with the comparison tool.
+
+**Built (steps P1 and P2).** With the profile made from the son's four videos, the module no longer calls them one long `warm up`: it finds a part at pace in each.
+
+**Found while trying it: `offtrack` gives false alarms on the son's footage.** With a part at pace found, the module reports 6 to 19 `offtrack` events per video. The user watched the whole of GX010183: the car never left the track (once or twice it was on a kerb), so all 19 there are false. They are a vibration of the camera, not rough ground; the technical specification has the measurements. This breaks the rule that a false alarm is worse than a missed event, and a profile cannot fix it. Decided by the user: the offtrack rule is reworked after the check video is built. Until then the module has not been run in full on the son's videos.
 
 ## 4. What the module must detect
 
@@ -180,7 +184,7 @@ Assumptions made while building this, to be confirmed by the user:
 `sliding` and `offtrack` (built in step 7, from the camera's motion sensors):
 
 - `sliding` is reported for slides the driver catches with a quick steering correction. All 10 slides marked in the examples are of this kind and are found.
-- `offtrack` is reported only when the car clearly shakes on grass or gravel for a second or more. Two wheels off for a moment feel like a kerb to the sensors and are left as `clear`, following the rule that a false alarm is worse than a missed event. Of the 2 marked in the examples, 1 is found.
+- `offtrack` is reported only when the car clearly shakes on grass or gravel for a second or more. Two wheels off for a moment feel like a kerb to the sensors and are left as `clear`, following the rule that a false alarm is worse than a missed event. Of the 2 marked in the examples, 1 is found. The missed one (02:31 in 09-41) is the right wheels about 20 cm off the track for a few tenths of a second (described by the user). On the son's footage the rule gives false alarms; see "Driver and car profile" in section 3.
 - Like the car events, neither is reported outside the part at pace (see the assumption above).
 
 Further candidates, not yet agreed: traffic ahead without a pass, flags or light panels, a slow car, pit lane, weather or surface change.

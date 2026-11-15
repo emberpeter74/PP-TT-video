@@ -14,8 +14,11 @@ Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list
 
 - Done: steps 0 to 6 (repository, tools, GPS extraction, events files and comparison tool, sensor data check, video reduction and speed measurement, car tracking for `overtaking`, `overtaken` and `held up`), step 7 (`sliding` and `offtrack` from the motion sensors) and step 8 (`warm up` and `cooling` from the motion sensors; events outside the at-pace part are dropped).
 - Done after step 7, at the author's wish: the label `out of session` (before the car joins the track, after it has left) and a first rule for `crash` (the car stands still within a minute after driving at pace). Both are in `pp_tt_video/session.py`.
-- Next: step 9 (`obstacle`, `other event`, the description experiment). A car standing on the track counts as `obstacle` (decided by the author).
-- Known weak spots in the sensor rules: the short offtrack at 02:31 in 09-41 is missed (it shakes no more than a kerb), and only slides caught with a steering correction are found.
+- Done before step 9, at the author's wish: driver and car profiles, steps P1 and P2 (`pp_tt_video/profile.py`, `pp_tt_video/make_profile.py`). The built-in values in `settings.py` are the author's own driving; a profile scales the driver values for someone else. The plan is in `docs/superpowers/plans/`.
+- Next, in this order (decided by the author): the check video, steps V1 to V7 (`CHECK_VIDEO_BUSINESS_SPEC.md`, `CHECK_VIDEO_TECHNICAL_SPEC.md`; it needs its own plan first); then a rework of the offtrack rule with the check video as the tool; then step 9 (`obstacle`, `other event`, the description experiment). A car standing on the track counts as `obstacle` (decided by the author).
+- **The offtrack rule gives false alarms on the son's footage** (`input video files/practice driver`): 6 to 19 per video, all 19 in GX010183 confirmed false by the author. They are a camera vibration (up-and-down only, about 87 per second), not rough ground. A profile cannot fix it. Measurements are in the technical spec under "Driver and car profiles". Until the rule is reworked, do not run the full detection on those videos: it would write the false alarms into their events files.
+- Not yet judged on the son's videos: whether all of GX010182 and GX010183 is at pace, and whether the `crash` in GX010179 is a stop in the pits.
+- Known weak spots in the sensor rules: the short offtrack at 02:31 in 09-41 is missed (right wheels about 20 cm off for a few tenths of a second; the up-and-down shake stays under the threshold), and only slides caught with a steering correction are found.
 - Open questions 2 to 5 in the business spec wait for the author's answer (two assumptions, the changed descriptions of `out of session`, `warm up` and `cooling`, a possible unmarked slide at 02:47 in 09-41, the 22-second `sliding` in the 12-17 hand-made file).
 - A brisk first lap is not `warm up` (decided by the author): 10-32 and 12-17 rightly get none.
 - Known weak spots in the car rules, from the 09-41 example: the overtake at 04:05 is missed and the one at 10:34 to 10:38 is reported as `held up` (see the table in the technical spec).
@@ -36,6 +39,7 @@ Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list
 
 - Readable for someone new to Python: small files, plain names, comments that explain why.
 - Values that may need tuning live in `pp_tt_video/settings.py`, never in the logic.
+- Rules read `settings.NAME` at the moment they run. Never copy a setting with `from pp_tt_video.settings import NAME` or into a function's default value: a profile changes the values in `settings` while a video is processed, and a copy would silently keep the built-in number.
 - Event types are data (`event_types.csv`), not code.
 - Every new piece of behaviour gets a check in `tests/`.
 
@@ -44,6 +48,9 @@ Steps refer to "Proposed order of work" in `TECHNICAL_SPEC.md`. Update this list
 - **Python:** the project runs with the virtual environment's Python, `.venv\Scripts\python.exe` (Python 3.13 with the detection libraries). The environment was made with `py -V:3.13 -m venv .venv`. Version 3.15 is also installed on the PC and is the default for plain `python`; it has no libraries.
 - **Run the checks:** `.venv\Scripts\python.exe -m unittest`
 - **Run the module:** `.venv\Scripts\python.exe -m pp_tt_video "<video file or folder>"`. It writes a GPX file and an events file per video and skips files that already exist. `--output-folder <folder>` writes elsewhere (needed for the examples, whose hand-made files sit next to the videos); `--gps-only` skips detection.
+- **Profiles:** `--profile <name or .toml file>` uses that profile for every video; a name means `profiles/<name>.toml` (the folder is not in Git). Without the option, a `profile.toml` in a video's folder is used for that video; otherwise the built-in values. Every video line says which profile was used.
+- **Make a profile:** `.venv\Scripts\python.exe -m pp_tt_video.make_profile "<folder with one driver's videos>"` writes `profile.toml` into that folder. `--name <name>` writes `profiles/<name>.toml` instead; `--print-only` measures and writes nothing; `--overwrite` replaces an existing profile.
+- **Other footage** is in `input video files/` (not in Git), one folder per driver: `practice driver` (the author's son, four videos, has a `profile.toml`) and `stronger driver` (the author, one video). No hand-made events files there.
 - **Check events files:** `.venv\Scripts\python.exe -m pp_tt_video.check_events "<folder>"`
 - **Measure reading speed:** `.venv\Scripts\python.exe -m pp_tt_video.measure_speed "<video>"`
 - **Compare two events files:** `.venv\Scripts\python.exe -m pp_tt_video.compare "<reference>" "<detected>"`

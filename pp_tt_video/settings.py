@@ -248,10 +248,10 @@ PROFILE_PERCENTILE = 95
 
 # The reference driver's levels (the user), measured the same way. A driver
 # with half these levels gets half the driver values in their profile.
-# First rough values; replaced by the exact measurement on the three
-# examples in step P2.
-REFERENCE_EFFORT = 2.5
-REFERENCE_CORNERING = 11.0
+# Measured with make_profile --print-only on the three examples together
+# (step P2): the built-in values above were tuned on those three videos.
+REFERENCE_EFFORT = 2.61
+REFERENCE_CORNERING = 10.92
 
 # File extensions that count as video files (compared in lower case).
 VIDEO_EXTENSIONS = {".mp4"}
