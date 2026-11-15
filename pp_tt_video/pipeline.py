@@ -30,7 +30,7 @@ from pp_tt_video.gps import GpsExtractionError, extract_gps, gpx_path_for
 from pp_tt_video.profile import BUILT_IN, ProfileError, profile_for_video, using_profile
 from pp_tt_video.sensor_file import sensors_path_for, write_sensor_file
 from pp_tt_video.sensors import SensorError, read_sensors
-from pp_tt_video.video import VideoError
+from pp_tt_video.video import VideoError, read_video_info
 
 
 @dataclass
@@ -166,17 +166,40 @@ class EventsMaker:
         except (VideoError, EventsFileError) as error:
             return False, str(error)
 
-    def keep_detections_file(self, video, output_folder, overwrite, on_progress=None):
-        """Make sure the detections of a video are saved. Returns (ok, message).
+    def make_check_video(self, video, output_folder, overwrite, profile=BUILT_IN,
+                         on_progress=None, on_drawing=None):
+        """Write the check video of a video. Returns (ok, message).
 
-        Needed when the events file already existed and was skipped: then no
-        detection has run in this run, and the check video still needs one.
+        The detections come from this run's detection, or from the file an
+        earlier run saved, or (when the events file existed and was skipped)
+        from a detection made now. Then the rules are run once more, with the
+        profile's values in force, and what they did is drawn over the video.
+
+        on_progress(part) follows a detection, on_drawing(part) the drawing.
         """
         if not Path(video).is_file():
             return False, f"Video file not found: {video}"
         try:
-            self.detections_for(video, output_folder, overwrite, on_progress, keep_file=True)
-            return True, f"detections in {detections_path_for(video, output_folder).name}"
+            # Imported here: the drawing needs Pillow, which comes with the
+            # detection libraries and may be missing on another PC.
+            from pp_tt_video import check_video
+            from pp_tt_video.explain import explain
+
+            path = check_video.check_video_path_for(video, output_folder)
+            if path.exists() and not overwrite:
+                return True, "check video already exists, skipped"
+            detections = self.detections_for(video, output_folder, overwrite, on_progress, keep_file=True)
+            duration_seconds = read_video_info(video).duration_seconds
+            try:
+                sensor_seconds = read_sensors(video)
+            except SensorError:
+                sensor_seconds = []   # the check video is made without the sensor part
+            # Inside this block the rules, and so everything that is drawn,
+            # use the profile's values.
+            with using_profile(profile):
+                explanation = explain(detections, sensor_seconds, duration_seconds)
+                check_video.write_check_video(video, path, explanation, profile.name, on_drawing)
+            return True, f"check video written to {path.name}"
         except ImportError as error:
             return False, f"detection libraries are not installed ({error})"
         except VideoError as error:
@@ -184,11 +207,13 @@ class EventsMaker:
 
 
 def process_video(video, overwrite=False, output_folder=None, events_maker=None,
-                  with_events=True, on_progress=None, profile_option=None, check_video=False):
+                  with_events=True, on_progress=None, profile_option=None, check_video=False,
+                  on_drawing=None):
     """Process one video and return a FileResult. Never raises an error.
 
     profile_option: what was given with --profile, or None.
-    check_video:    True with --check-video: keep what the check video needs.
+    check_video:    True with --check-video: also write the check video.
+    on_drawing:     like on_progress, for the drawing of the check video.
     """
     started = time.monotonic()
     ok, message = make_gps_file(video, output_folder, overwrite)
@@ -210,15 +235,16 @@ def process_video(video, overwrite=False, output_folder=None, events_maker=None,
         ok = ok and events_ok
         message = f"{message}; {events_message}"
         if check_video:
-            kept_ok, kept_message = events_maker.keep_detections_file(video, output_folder, overwrite, on_progress)
-            ok = ok and kept_ok
-            message = f"{message}; {kept_message}"
+            check_ok, check_message = events_maker.make_check_video(
+                video, output_folder, overwrite, profile, on_progress, on_drawing)
+            ok = ok and check_ok
+            message = f"{message}; {check_message}"
     return FileResult(Path(video), ok, message, time.monotonic() - started)
 
 
 def process_videos(inputs, overwrite=False, output_folder=None, with_events=True,
                    on_start=None, on_progress=None, on_done=None, profile_option=None,
-                   check_video=False):
+                   check_video=False, on_drawing=None):
     """Process every video and return one FileResult per video.
 
     Each video is handled on its own: a failure is recorded and the run
@@ -228,12 +254,15 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
     with_events:   set to False to extract only the GPS tracks.
     profile_option: a profile name or .toml file for every video (--profile);
                     None to use each folder's profile.toml, if it has one.
-    check_video:   set to True to also keep the car detections of every
-                   video in a file (-detections.json), for the check video.
+    check_video:   set to True to also write a check video per video
+                   (-check.mp4): the video in reduced size with the module's
+                   work drawn over it. The car detections are then kept in a
+                   file (-detections.json) and used again by later runs.
 
     To follow the progress, the caller can pass three functions:
       on_start(number, total, video)     before a video is processed,
       on_progress(number, total, part)   during detection; part runs from 0 to 1,
+      on_drawing(number, total, part)    while the check video is drawn,
       on_done(number, total, result)     as soon as a video is finished.
     """
     videos = find_videos(inputs)
@@ -249,8 +278,12 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
             if on_progress:
                 on_progress(number, total, part)
 
+        def report_drawing(part, number=number):
+            if on_drawing:
+                on_drawing(number, total, part)
+
         result = process_video(video, overwrite, output_folder, events_maker, with_events, report,
-                               profile_option, check_video)
+                               profile_option, check_video, report_drawing)
         results.append(result)
         if on_done:
             on_done(number, total, result)

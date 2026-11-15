@@ -156,3 +156,115 @@ def read_frames(video_path, start_seconds=0, duration_seconds=None,
             message = error_file.read().decode("utf-8", errors="replace").strip()
             hint = " (if this PC has no Nvidia card, set USE_GRAPHICS_CARD to False)" if decoder else ""
             raise VideoError(f"ffmpeg could not decode {video_path.name}{hint}: {message[-500:]}")
+
+
+class VideoWriter:
+    """Writes pictures to a video file, one after the other.
+
+    Used with "with", so the file is always finished properly:
+
+        with VideoWriter("out.mp4", 1280, 720, 30) as writer:
+            writer.write(pixels)   # 3 bytes per pixel, row by row, like Frame.pixels
+
+    The pictures are handed to ffmpeg through a pipe, and ffmpeg compresses
+    them as H.264, a format every video player understands.
+
+    The video is written under a temporary name and renamed when it is
+    complete. A run that is interrupted, or fails, leaves no file behind
+    that the next run could take for a finished video.
+    """
+
+    def __init__(self, path, width, height, frames_per_second, sound_from=None,
+                 quality=28, use_graphics_card=None):
+        """
+        sound_from: a video file whose sound is copied into the new video.
+        quality:    how strongly the video is compressed. Lower is better and
+                    larger; 18 is very good, 28 is good enough to check things.
+        """
+        self.path = Path(path)
+        # ffmpeg picks the file format from the ending, so the temporary
+        # name must end in .mp4 too.
+        self.part = self.path.with_name(self.path.stem + ".part" + self.path.suffix)
+        self.bytes_per_picture = width * height * 3
+        if use_graphics_card is None:
+            use_graphics_card = settings.USE_GRAPHICS_CARD
+
+        command = [
+            str(settings.FFMPEG), "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "rawvideo", "-pix_fmt", "rgb24",          # what comes through the pipe:
+            "-s", f"{width}x{height}",                      # plain pixels of this size,
+            "-r", str(frames_per_second),                   # this many per second
+            "-i", "-",                                      # "-" = read from the pipe
+        ]
+        if sound_from:
+            command += ["-i", str(sound_from)]
+        command += ["-map", "0:v"]                          # the picture: from the pipe
+        if sound_from:
+            # The first sound track of the other file, copied as it is. The
+            # "?" means: carry on without sound if that file has none.
+            command += ["-map", "1:a:0?", "-c:a", "copy", "-shortest"]
+        if use_graphics_card:
+            command += ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", str(quality), "-b:v", "0"]
+        else:
+            command += ["-c:v", "libx264", "-preset", "veryfast", "-crf", str(quality)]
+        command += ["-pix_fmt", "yuv420p", str(self.part)]  # the colour format players expect
+        self.command = command
+        self.process = None
+        self.error_file = None
+
+    def __enter__(self):
+        # ffmpeg's error messages go to a temporary file.
+        self.error_file = tempfile.TemporaryFile()
+        try:
+            self.process = subprocess.Popen(self.command, stdin=subprocess.PIPE, stderr=self.error_file)
+        except FileNotFoundError:
+            self.error_file.close()
+            raise VideoError(f"ffmpeg not found: {settings.FFMPEG}")
+        return self
+
+    def write(self, pixels):
+        """Add one picture to the video."""
+        if len(pixels) != self.bytes_per_picture:
+            raise VideoError(f"a picture of {len(pixels)} bytes does not fit the video size")
+        try:
+            self.process.stdin.write(pixels)
+        except OSError:
+            # ffmpeg has stopped and closed the pipe. Why it stopped is
+            # reported when the "with" block ends.
+            raise VideoError(self._failure())
+
+    def _failure(self):
+        """Wait for ffmpeg to end and return its error message."""
+        if self.process.stdin and not self.process.stdin.closed:
+            try:
+                self.process.stdin.close()
+            except OSError:
+                pass
+        self.process.wait()
+        self.error_file.seek(0)
+        message = self.error_file.read().decode("utf-8", errors="replace").strip()
+        return f"ffmpeg could not write {self.path.name}: {message[-500:]}"
+
+    def __exit__(self, error_type, error, traceback):
+        # Runs when the "with" block ends, also when an error happened in it.
+        try:
+            if error_type is None:
+                self.process.stdin.close()   # tells ffmpeg that no more pictures come
+                self.process.wait()
+                if self.process.returncode != 0:
+                    raise VideoError(self._failure())
+                self.part.replace(self.path)   # complete: give it its real name
+            else:
+                # Something went wrong halfway: stop ffmpeg, keep nothing.
+                if self.process.poll() is None:
+                    self.process.kill()
+                self.process.wait()
+                try:
+                    self.process.stdin.close()
+                except OSError:
+                    pass   # the pipe broke when ffmpeg was stopped
+        finally:
+            self.error_file.close()
+            if self.part.exists():
+                self.part.unlink()
+        return False   # an error from inside the block is passed on

@@ -229,10 +229,16 @@ class DetectionsInPipelineTest(unittest.TestCase):
         self.video = self.folder / "x.mp4"
         self.video.write_bytes(b"")
         self.detection_runs = 0
+        self.drawn = []   # per check video drawn: (profile name, pace value in force, explanation)
 
         def fake_detect_boxes(video, detector, on_progress=None):
             self.detection_runs += 1
             return small_detections()
+
+        def fake_write_check_video(video, output_path, explanation, profile_name, on_progress=None):
+            # Stands in for the drawing: notes what it was given and leaves a file.
+            self.drawn.append((profile_name, settings.PACE_MIN_EFFORT, explanation))
+            Path(output_path).write_bytes(b"a check video")
 
         info = VideoInfo(width=5312, height=2988, frames_per_second=29.97, duration_seconds=3.0, codec="hevc")
         for target, replacement in [
@@ -241,6 +247,8 @@ class DetectionsInPipelineTest(unittest.TestCase):
             ("pp_tt_video.detect_events.read_video_info", lambda video: info),
             ("pp_tt_video.detect_events.read_sensors", lambda video: []),
             ("pp_tt_video.pipeline.read_sensors", lambda video: []),
+            ("pp_tt_video.pipeline.read_video_info", lambda video: info),
+            ("pp_tt_video.check_video.write_check_video", fake_write_check_video),
         ]:
             patcher = mock.patch(target, replacement)
             patcher.start()
@@ -295,6 +303,53 @@ class DetectionsInPipelineTest(unittest.TestCase):
         self.run_module("check", check_video=True)
         self.run_module("check", check_video=True, overwrite=True)
         self.assertEqual(self.detection_runs, 2)
+
+    def test_without_the_option_no_check_video_is_made(self):
+        output = self.run_module("plain")
+        self.assertEqual(self.drawn, [])
+        self.assertFalse((output / "x-check.mp4").exists())
+
+    def test_check_video_is_written(self):
+        output = self.run_module("check", check_video=True)
+        self.assertTrue((output / "x-check.mp4").is_file())
+        self.assertEqual(len(self.drawn), 1)
+        profile_name, _, explanation = self.drawn[0]
+        self.assertEqual(profile_name, "built-in values")
+        # The drawing is given the car of the detections, with its number.
+        self.assertEqual(explanation.pictures[0].kept[0].track_number, 1)
+        self.assertEqual(explanation.duration_seconds, 3.0)
+        self.assertEqual(self.detection_runs, 1)   # one pass for events and check video
+
+    def test_check_video_is_skipped_when_it_exists(self):
+        self.run_module("check", check_video=True)
+        self.run_module("check", check_video=True)
+        self.assertEqual(len(self.drawn), 1)
+        self.assertEqual(self.detection_runs, 1)
+
+    def test_check_video_is_drawn_again_from_the_saved_detections(self):
+        output = self.run_module("check", check_video=True)
+        (output / "x-check.mp4").unlink()
+        self.run_module("check", check_video=True)
+        self.assertEqual(len(self.drawn), 2)
+        self.assertEqual(self.detection_runs, 1)
+
+    def test_check_video_uses_the_profile(self):
+        (self.folder / "profile.toml").write_text("PACE_MIN_EFFORT = 0.5\n", encoding="utf-8")
+        built_in = settings.PACE_MIN_EFFORT
+        self.run_module("check", check_video=True)
+        profile_name, pace_value, _ = self.drawn[0]
+        self.assertEqual(profile_name, self.folder.name)
+        self.assertEqual(pace_value, 0.5)
+        self.assertEqual(settings.PACE_MIN_EFFORT, built_in)
+
+    def test_video_without_sensor_data_still_gets_a_check_video(self):
+        def no_sensors(video):
+            raise SensorError("ExifTool failed")
+
+        with mock.patch("pp_tt_video.pipeline.read_sensors", no_sensors):
+            self.run_module("check", check_video=True)
+        self.assertEqual(len(self.drawn), 1)
+        self.assertEqual(self.drawn[0][2].sensor_seconds, [])
 
     def test_events_file_is_the_same_with_and_without_the_option(self):
         plain = self.run_module("plain")

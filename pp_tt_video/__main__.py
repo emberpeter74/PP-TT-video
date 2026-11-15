@@ -12,8 +12,9 @@ import sys
 
 from pp_tt_video.pipeline import process_videos
 
-# Remembers the last percentage shown, so each step is printed only once.
-last_shown = {"percent": -1}
+# Remembers the last percentage shown, so each step is printed only once:
+# one for the detection, one for drawing the check video.
+last_shown = {"percent": -1, "drawing": -1}
 
 
 def show_start(number, total, video):
@@ -21,6 +22,7 @@ def show_start(number, total, video):
     # flush=True shows the line at once instead of waiting for more output.
     print(f"[{number}/{total}] {video.name}: working ...", flush=True)
     last_shown["percent"] = -1
+    last_shown["drawing"] = -1
 
 
 def show_progress(number, total, part):
@@ -29,6 +31,14 @@ def show_progress(number, total, part):
     if percent > last_shown["percent"]:
         last_shown["percent"] = percent
         print(f"[{number}/{total}]   detecting events: {percent}%", flush=True)
+
+
+def show_drawing(number, total, part):
+    """Show how far the drawing of the check video has got, in steps of 10 percent."""
+    percent = int(part * 10) * 10
+    if percent > last_shown["drawing"]:
+        last_shown["drawing"] = percent
+        print(f"[{number}/{total}]   drawing the check video: {percent}%", flush=True)
 
 
 def show_done(number, total, result):
@@ -69,6 +79,7 @@ def main():
         check_video=arguments.check_video,
         on_start=show_start,
         on_progress=show_progress,
+        on_drawing=show_drawing,
         on_done=show_done,
     )
 

@@ -18,6 +18,10 @@ example video  and output file/
 # The author's own footage to run the module on, with its output files.
 input video files/
 
+# Check videos and still pictures taken from them, made to look at. They
+# show the driver and are far too large for Git.
+check videos/
+
 # Driver and car profiles chosen with --profile <name>. They carry driver
 # names, and the repository is public.
 profiles/

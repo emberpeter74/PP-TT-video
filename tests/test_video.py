@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from pp_tt_video import settings
-from pp_tt_video.video import VideoError, VideoInfo, analysis_size, read_frames, read_video_info
+from pp_tt_video.video import VideoError, VideoInfo, VideoWriter, analysis_size, read_frames, read_video_info
 
 EXAMPLE_FOLDER = settings.PROJECT_FOLDER / "example video  and output file"
 EXAMPLE_VIDEO = EXAMPLE_FOLDER / "RaceBox Track Sessionon 30-05-2026 12-17.MP4"
@@ -85,6 +85,58 @@ class SmallVideoTest(unittest.TestCase):
         not_a_video.write_bytes(b"not a real video")
         with self.assertRaises(VideoError):
             list(read_frames(not_a_video))
+
+
+@unittest.skipUnless(TOOLS_PRESENT, "ffmpeg is not in the executables folder")
+class VideoWriterTest(unittest.TestCase):
+    """Writes tiny videos on the processor, so no graphics card is needed."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name)
+        self.path = self.folder / "out.mp4"
+
+    def names_in_folder(self):
+        return sorted(entry.name for entry in self.folder.iterdir())
+
+    def test_written_video_reads_back(self):
+        grey_picture = bytes([128]) * (64 * 48 * 3)
+        with VideoWriter(self.path, 64, 48, 5, use_graphics_card=False) as writer:
+            for _ in range(10):
+                writer.write(grey_picture)
+        info = read_video_info(self.path)
+        self.assertEqual((info.width, info.height, info.codec), (64, 48, "h264"))
+        self.assertAlmostEqual(info.duration_seconds, 2.0, delta=0.3)
+        # Only the finished file is there: nothing half-written next to it.
+        self.assertEqual(self.names_in_folder(), ["out.mp4"])
+
+    def test_failed_write_leaves_no_file(self):
+        # This kind of video cannot have an odd width: the encoder refuses.
+        picture = bytes(65 * 48 * 3)
+        with self.assertRaises(VideoError):
+            with VideoWriter(self.path, 65, 48, 5, use_graphics_card=False) as writer:
+                for _ in range(10):
+                    writer.write(picture)
+        self.assertEqual(self.names_in_folder(), [])
+
+    def test_error_while_drawing_leaves_no_file(self):
+        # Something goes wrong in our own code halfway through the video.
+        picture = bytes(64 * 48 * 3)
+        with self.assertRaises(ZeroDivisionError):
+            with VideoWriter(self.path, 64, 48, 5, use_graphics_card=False) as writer:
+                writer.write(picture)
+                1 / 0
+        self.assertEqual(self.names_in_folder(), [])
+
+    def test_existing_video_is_replaced_only_by_a_complete_one(self):
+        self.path.write_bytes(b"the old video")
+        picture = bytes(64 * 48 * 3)
+        with self.assertRaises(ZeroDivisionError):
+            with VideoWriter(self.path, 64, 48, 5, use_graphics_card=False) as writer:
+                writer.write(picture)
+                1 / 0
+        self.assertEqual(self.path.read_bytes(), b"the old video")
 
 
 @unittest.skipUnless(TOOLS_PRESENT and EXAMPLE_VIDEO.exists(), "example video is not on this PC")
