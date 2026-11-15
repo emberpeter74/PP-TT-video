@@ -50,7 +50,15 @@ def main():
         "--profile",
         help="driver and car profile: a name from the profiles folder, or a .toml file",
     )
+    parser.add_argument(
+        "--check-video",
+        action="store_true",
+        help="also write a check video that shows what the module saw and decided",
+    )
     arguments = parser.parse_args()
+    if arguments.check_video and arguments.gps_only:
+        # parser.error prints the message with the usage line and stops.
+        parser.error("--check-video needs the detection: it cannot be used with --gps-only")
 
     results = process_videos(
         arguments.inputs,
@@ -58,6 +66,7 @@ def main():
         output_folder=arguments.output_folder,
         with_events=not arguments.gps_only,
         profile_option=arguments.profile,
+        check_video=arguments.check_video,
         on_start=show_start,
         on_progress=show_progress,
         on_done=show_done,

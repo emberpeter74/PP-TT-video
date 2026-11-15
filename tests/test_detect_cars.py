@@ -31,6 +31,14 @@ class CarDetectorTest(unittest.TestCase):
         self.assertGreater(best.confidence, 0.9)
         self.assertGreater(best.height / frames[0].height, settings.PASSING_CAR_HEIGHT)
 
+    def test_detect_is_detect_raw_without_the_too_wide_boxes(self):
+        from pp_tt_video.detect_cars import keep_car_boxes
+        frames = list(read_frames(EXAMPLE_VIDEO, start_seconds=70.6, duration_seconds=0.4))
+        raw = self.detector.detect_raw(frames)
+        kept = self.detector.detect(frames)
+        self.assertEqual(kept, [keep_car_boxes(boxes, frame.width) for boxes, frame in zip(raw, frames)])
+        self.assertGreater(len(raw[0]), 0)
+
     def test_empty_track_gives_no_confident_large_car(self):
         # At 01:06 the track ahead is empty.
         frames = list(read_frames(EXAMPLE_VIDEO, start_seconds=66.0, duration_seconds=0.2))

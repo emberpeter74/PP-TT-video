@@ -6,8 +6,23 @@ from pathlib import Path
 from unittest import mock
 
 from pp_tt_video import settings
+from pp_tt_video.detect_cars import CarBox
+from pp_tt_video.detections_file import Detections, load_detections
 from pp_tt_video.pipeline import find_videos, make_sensor_file, process_videos
 from pp_tt_video.sensors import SensorError, SensorSecond
+from pp_tt_video.video import VideoInfo
+
+
+def small_detections():
+    """What a detection pass over a very short video could return: one car, 15 pictures."""
+    pictures = [(number * 0.2, [CarBox(600, 300, 680, 360, 0.95)]) for number in range(15)]
+    return Detections(
+        analysis_width=settings.ANALYSIS_WIDTH,
+        picture_height=720,
+        frames_per_second=settings.ANALYSIS_FRAMES_PER_SECOND,
+        min_confidence=settings.MIN_DETECTION_CONFIDENCE,
+        pictures=pictures,
+    )
 
 
 class FindVideosTest(unittest.TestCase):
@@ -123,17 +138,19 @@ class ProfileInPipelineTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.folder = Path(temporary.name)
-        self.seen = []   # the PACE_MIN_EFFORT the detection saw, per video
+        self.seen = []   # the PACE_MIN_EFFORT the rules saw, per video
 
-        def fake_detect_timeline(video, detector, on_progress=None):
+        def fake_timeline_from_detections(video, detections):
             self.seen.append(settings.PACE_MIN_EFFORT)
             return []
 
-        # The model is not loaded, the detection is the fake, and no events
-        # file is written (the fake gives no real timeline).
+        # The model is not loaded, the slow pass over the pictures and the
+        # rules are fakes, and no events file is written (the fake gives no
+        # real timeline).
         for target, replacement in [
             ("pp_tt_video.detect_cars.CarDetector", mock.MagicMock()),
-            ("pp_tt_video.detect_events.detect_timeline", fake_detect_timeline),
+            ("pp_tt_video.detect_events.detect_boxes", lambda video, detector, on_progress=None: small_detections()),
+            ("pp_tt_video.detect_events.timeline_from_detections", fake_timeline_from_detections),
             ("pp_tt_video.pipeline.write_events_file", mock.MagicMock()),
         ]:
             patcher = mock.patch(target, replacement)
@@ -195,6 +212,98 @@ class ProfileInPipelineTest(unittest.TestCase):
         results = process_videos([folder], with_events=False)
         self.assertNotIn("profile", results[0].message)
         self.assertEqual(self.seen, [])
+
+
+class DetectionsInPipelineTest(unittest.TestCase):
+    """With --check-video the detections are saved once and reused.
+
+    The slow pass over the pictures is a fake that counts how often it is
+    called. The rules are the real ones, working on the fake's detections,
+    with a made-up video length and no sensor data.
+    """
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name)
+        self.video = self.folder / "x.mp4"
+        self.video.write_bytes(b"")
+        self.detection_runs = 0
+
+        def fake_detect_boxes(video, detector, on_progress=None):
+            self.detection_runs += 1
+            return small_detections()
+
+        info = VideoInfo(width=5312, height=2988, frames_per_second=29.97, duration_seconds=3.0, codec="hevc")
+        for target, replacement in [
+            ("pp_tt_video.detect_cars.CarDetector", mock.MagicMock()),
+            ("pp_tt_video.detect_events.detect_boxes", fake_detect_boxes),
+            ("pp_tt_video.detect_events.read_video_info", lambda video: info),
+            ("pp_tt_video.detect_events.read_sensors", lambda video: []),
+            ("pp_tt_video.pipeline.read_sensors", lambda video: []),
+        ]:
+            patcher = mock.patch(target, replacement)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def run_module(self, output_name, **options):
+        output = self.folder / output_name
+        output.mkdir(exist_ok=True)
+        process_videos([self.video], output_folder=output, **options)
+        return output
+
+    def test_without_the_option_nothing_is_saved(self):
+        output = self.run_module("plain")
+        self.assertTrue((output / "x-events.txt").is_file())
+        self.assertFalse((output / "x-detections.json").exists())
+
+    def test_with_the_option_the_detections_are_saved(self):
+        output = self.run_module("check", check_video=True)
+        self.assertEqual(load_detections(output / "x-detections.json"), small_detections())
+        self.assertEqual(self.detection_runs, 1)   # one pass serves the events and the saving
+
+    def test_saved_detections_are_reused(self):
+        output = self.run_module("check", check_video=True)
+        (output / "x-events.txt").unlink()   # so the events are made again
+        self.run_module("check", check_video=True)
+        self.assertTrue((output / "x-events.txt").is_file())
+        self.assertEqual(self.detection_runs, 1)
+
+    def test_detections_are_made_when_the_events_file_already_exists(self):
+        output = self.run_module("check")                      # events only
+        self.assertEqual(self.detection_runs, 1)
+        self.run_module("check", check_video=True)             # events skipped
+        self.assertTrue((output / "x-detections.json").is_file())
+        self.assertEqual(self.detection_runs, 2)
+
+    def test_detections_from_other_settings_are_not_reused(self):
+        output = self.run_module("check", check_video=True)
+        (output / "x-events.txt").unlink()
+        with mock.patch.object(settings, "ANALYSIS_FRAMES_PER_SECOND", 10):
+            self.run_module("check", check_video=True)
+        self.assertEqual(self.detection_runs, 2)
+
+    def test_half_written_detections_are_not_reused(self):
+        output = self.run_module("check", check_video=True)
+        (output / "x-events.txt").unlink()
+        (output / "x-detections.json").write_text('{"pictures": [', encoding="utf-8")
+        self.run_module("check", check_video=True)
+        self.assertEqual(self.detection_runs, 2)
+        self.assertEqual(load_detections(output / "x-detections.json"), small_detections())
+
+    def test_overwrite_detects_again_but_only_once(self):
+        self.run_module("check", check_video=True)
+        self.run_module("check", check_video=True, overwrite=True)
+        self.assertEqual(self.detection_runs, 2)
+
+    def test_events_file_is_the_same_with_and_without_the_option(self):
+        plain = self.run_module("plain")
+        check = self.run_module("check", check_video=True)
+        self.assertEqual((plain / "x-events.txt").read_bytes(), (check / "x-events.txt").read_bytes())
+        # And once more from the saved detections.
+        (check / "x-events.txt").unlink()
+        self.run_module("check", check_video=True)
+        self.assertEqual((plain / "x-events.txt").read_bytes(), (check / "x-events.txt").read_bytes())
 
 
 if __name__ == "__main__":

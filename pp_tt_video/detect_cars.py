@@ -76,6 +76,19 @@ class CarDetector:
 
         Returns one list of CarBox per frame, in the same order.
         """
+        return [
+            keep_car_boxes(boxes, frame.width)
+            for boxes, frame in zip(self.detect_raw(frames), frames)
+        ]
+
+    def detect_raw(self, frames):
+        """Find every vehicle the model sees in a list of frames.
+
+        Like detect, but nothing is thrown away yet: the boxes that cannot
+        be another car (the own cockpit) are still in the lists. These raw
+        boxes are what is saved, so that the check video can show what was
+        thrown away.
+        """
         torch = self.torch
         pictures = []
         for frame in frames:
@@ -99,5 +112,5 @@ class CarDetector:
             ):
                 if number in self.vehicle_numbers:
                     boxes.append(CarBox(*position, confidence))
-            results.append(keep_car_boxes(boxes, frame.width))
+            results.append(boxes)
         return results

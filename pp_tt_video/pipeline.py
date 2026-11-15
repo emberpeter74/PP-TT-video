@@ -17,6 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pp_tt_video import settings
+from pp_tt_video.detections_file import (
+    DetectionsError,
+    detections_path_for,
+    fits_settings,
+    load_detections,
+    save_detections,
+)
 from pp_tt_video.event_types import known_labels
 from pp_tt_video.events import EventsFileError, events_path_for, write_events_file
 from pp_tt_video.gps import GpsExtractionError, extract_gps, gpx_path_for
@@ -91,11 +98,51 @@ class EventsMaker:
 
     def __init__(self):
         self.detector = None
+        # The detections of the video worked on last, as (video, detections),
+        # so the steps of one video share one pass over its pictures.
+        self.last_detections = None
 
-    def make_events_file(self, video, output_folder, overwrite, on_progress=None, profile=BUILT_IN):
+    def detections_for(self, video, output_folder, overwrite, on_progress=None, keep_file=False):
+        """Return the car detections of a video: the slow part of the work.
+
+        keep_file: with --check-video the detections are kept in a file. A
+        file from an earlier run is used again instead of looking at the
+        video once more, unless overwrite is set or the file does not fit
+        (half-written, or made with other analysis settings).
+        May raise ImportError or VideoError.
+        """
+        # Imported here so that the GPS part also works on a PC where the
+        # detection libraries are not installed.
+        from pp_tt_video import detect_events
+        from pp_tt_video.detect_cars import CarDetector
+
+        video = Path(video)
+        if self.last_detections and self.last_detections[0] == video:
+            return self.last_detections[1]
+
+        path = detections_path_for(video, output_folder)
+        detections = None
+        if keep_file and path.exists() and not overwrite:
+            try:
+                saved = load_detections(path)
+                if fits_settings(saved):
+                    detections = saved
+            except DetectionsError:
+                pass   # not usable: detect again and replace it
+        if detections is None:
+            if self.detector is None:
+                self.detector = CarDetector()   # loading the model takes a few seconds
+            detections = detect_events.detect_boxes(video, self.detector, on_progress)
+            if keep_file:
+                save_detections(path, detections)
+        self.last_detections = (video, detections)
+        return detections
+
+    def make_events_file(self, video, output_folder, overwrite, on_progress=None, profile=BUILT_IN,
+                         keep_detections=False):
         """Detect the events and write the events file. Returns (ok, message).
 
-        The detection runs with the profile's values in force.
+        The rules run with the profile's values in force.
         """
         events_path = events_path_for(video, output_folder)
         # Check first: detection takes minutes, and an existing file (perhaps
@@ -105,17 +152,13 @@ class EventsMaker:
         if not Path(video).is_file():
             return False, f"Video file not found: {video}"
         try:
-            # Imported here so that the GPS part also works on a PC where the
-            # detection libraries are not installed.
-            from pp_tt_video.detect_cars import CarDetector
-            from pp_tt_video.detect_events import detect_timeline
+            from pp_tt_video import detect_events
 
-            if self.detector is None:
-                self.detector = CarDetector()   # loading the model takes a few seconds
+            detections = self.detections_for(video, output_folder, overwrite, on_progress, keep_detections)
             # Inside this block the rules see the profile's values; after
             # it, the built-in values are back for the next video.
             with using_profile(profile):
-                timeline = detect_timeline(video, self.detector, on_progress)
+                timeline = detect_events.timeline_from_detections(video, detections)
             write_events_file(events_path, timeline, known_labels(), overwrite=overwrite)
             return True, f"events written to {events_path.name}"
         except ImportError as error:
@@ -123,12 +166,29 @@ class EventsMaker:
         except (VideoError, EventsFileError) as error:
             return False, str(error)
 
+    def keep_detections_file(self, video, output_folder, overwrite, on_progress=None):
+        """Make sure the detections of a video are saved. Returns (ok, message).
+
+        Needed when the events file already existed and was skipped: then no
+        detection has run in this run, and the check video still needs one.
+        """
+        if not Path(video).is_file():
+            return False, f"Video file not found: {video}"
+        try:
+            self.detections_for(video, output_folder, overwrite, on_progress, keep_file=True)
+            return True, f"detections in {detections_path_for(video, output_folder).name}"
+        except ImportError as error:
+            return False, f"detection libraries are not installed ({error})"
+        except VideoError as error:
+            return False, str(error)
+
 
 def process_video(video, overwrite=False, output_folder=None, events_maker=None,
-                  with_events=True, on_progress=None, profile_option=None):
+                  with_events=True, on_progress=None, profile_option=None, check_video=False):
     """Process one video and return a FileResult. Never raises an error.
 
     profile_option: what was given with --profile, or None.
+    check_video:    True with --check-video: keep what the check video needs.
     """
     started = time.monotonic()
     ok, message = make_gps_file(video, output_folder, overwrite)
@@ -146,14 +206,19 @@ def process_video(video, overwrite=False, output_folder=None, events_maker=None,
         message = f"{message}; profile: {profile.description}"
         events_maker = events_maker or EventsMaker()
         events_ok, events_message = events_maker.make_events_file(
-            video, output_folder, overwrite, on_progress, profile)
+            video, output_folder, overwrite, on_progress, profile, keep_detections=check_video)
         ok = ok and events_ok
         message = f"{message}; {events_message}"
+        if check_video:
+            kept_ok, kept_message = events_maker.keep_detections_file(video, output_folder, overwrite, on_progress)
+            ok = ok and kept_ok
+            message = f"{message}; {kept_message}"
     return FileResult(Path(video), ok, message, time.monotonic() - started)
 
 
 def process_videos(inputs, overwrite=False, output_folder=None, with_events=True,
-                   on_start=None, on_progress=None, on_done=None, profile_option=None):
+                   on_start=None, on_progress=None, on_done=None, profile_option=None,
+                   check_video=False):
     """Process every video and return one FileResult per video.
 
     Each video is handled on its own: a failure is recorded and the run
@@ -163,6 +228,8 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
     with_events:   set to False to extract only the GPS tracks.
     profile_option: a profile name or .toml file for every video (--profile);
                     None to use each folder's profile.toml, if it has one.
+    check_video:   set to True to also keep the car detections of every
+                   video in a file (-detections.json), for the check video.
 
     To follow the progress, the caller can pass three functions:
       on_start(number, total, video)     before a video is processed,
@@ -182,7 +249,8 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
             if on_progress:
                 on_progress(number, total, part)
 
-        result = process_video(video, overwrite, output_folder, events_maker, with_events, report, profile_option)
+        result = process_video(video, overwrite, output_folder, events_maker, with_events, report,
+                               profile_option, check_video)
         results.append(result)
         if on_done:
             on_done(number, total, result)
