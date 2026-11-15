@@ -3,9 +3,9 @@
 This is the function the main program will call later. Running the module by
 hand (see __main__.py) uses the same function.
 
-Every video gets two files: the GPS track (.gpx) and the events file
-(-events.txt). The two are made independently: if one fails, the other is
-still written.
+Every video gets three files: the GPS track (.gpx), the motion sensor data
+(-sensors.csv) and the events file (-events.txt). They are made
+independently: if one fails, the others are still written.
 
 The events are detected with the video's driver and car profile, if it has
 one (see profile.py): the one given with --profile, or the profile.toml in
@@ -21,6 +21,8 @@ from pp_tt_video.event_types import known_labels
 from pp_tt_video.events import EventsFileError, events_path_for, write_events_file
 from pp_tt_video.gps import GpsExtractionError, extract_gps, gpx_path_for
 from pp_tt_video.profile import BUILT_IN, ProfileError, profile_for_video, using_profile
+from pp_tt_video.sensor_file import sensors_path_for, write_sensor_file
+from pp_tt_video.sensors import SensorError, read_sensors
 from pp_tt_video.video import VideoError
 
 
@@ -60,6 +62,28 @@ def make_gps_file(video, output_folder, overwrite):
         return True, "GPX file already exists, skipped"
     except GpsExtractionError as error:
         return False, str(error)
+
+
+def make_sensor_file(video, output_folder, overwrite, read=None):
+    """Write the motion sensor data to a CSV file. Returns (ok, message).
+
+    read: the function that reads a video's sensor data; read_sensors unless
+    a check hands in a stand-in.
+    """
+    read = read or read_sensors
+    path = sensors_path_for(video, output_folder)
+    # Check first: reading the sensors takes about 5 seconds.
+    if path.exists() and not overwrite:
+        return True, "sensor file already exists, skipped"
+    try:
+        sensor_seconds = read(video)
+    except SensorError as error:
+        return False, str(error)
+    if not sensor_seconds:
+        # Not a GoPro file, or recorded without sensor data: nothing to write.
+        return True, "no motion sensor data in this video"
+    write_sensor_file(path, sensor_seconds)
+    return True, f"sensor data written to {path.name}"
 
 
 class EventsMaker:
@@ -108,6 +132,10 @@ def process_video(video, overwrite=False, output_folder=None, events_maker=None,
     """
     started = time.monotonic()
     ok, message = make_gps_file(video, output_folder, overwrite)
+    # The sensor file is made for every video, also with --gps-only.
+    sensors_ok, sensors_message = make_sensor_file(video, output_folder, overwrite)
+    ok = ok and sensors_ok
+    message = f"{message}; {sensors_message}"
     if with_events:
         try:
             profile = profile_for_video(video, profile_option)

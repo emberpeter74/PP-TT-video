@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest import mock
 
 from pp_tt_video import settings
-from pp_tt_video.pipeline import find_videos, process_videos
+from pp_tt_video.pipeline import find_videos, make_sensor_file, process_videos
+from pp_tt_video.sensors import SensorError, SensorSecond
 
 
 class FindVideosTest(unittest.TestCase):
@@ -42,6 +43,72 @@ class ProgressTest(unittest.TestCase):
     def test_works_without_progress_functions(self):
         results = process_videos(["one.mp4"])
         self.assertFalse(results[0].ok)
+
+
+class SensorFileInPipelineTest(unittest.TestCase):
+    """The sensor file is made from a stand-in reader, so no real video is needed."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name)
+        self.video = self.folder / "x.mp4"
+        self.video.write_bytes(b"")
+        self.sensor_file = self.folder / "x-sensors.csv"
+
+    @staticmethod
+    def one_second(video):
+        return [SensorSecond(0.0, [(-9.8, 0.0, 0.0)] * 4, [(0.0, 0.0, 0.0)] * 4)]
+
+    def test_writes_the_file(self):
+        ok, message = make_sensor_file(self.video, None, False, read=self.one_second)
+        self.assertTrue(ok, message)
+        self.assertIn("x-sensors.csv", message)
+        self.assertEqual(len(self.sensor_file.read_text(encoding="utf-8").splitlines()), 1 + 4)
+
+    def test_output_folder_is_used(self):
+        out = self.folder / "out"
+        out.mkdir()
+        ok, _ = make_sensor_file(self.video, out, False, read=self.one_second)
+        self.assertTrue(ok)
+        self.assertTrue((out / "x-sensors.csv").is_file())
+        self.assertFalse(self.sensor_file.exists())
+
+    def test_existing_file_is_skipped_without_reading(self):
+        self.sensor_file.write_text("mine\n", encoding="utf-8")
+
+        def must_not_read(video):
+            raise AssertionError("the video was read although the file exists")
+
+        ok, message = make_sensor_file(self.video, None, False, read=must_not_read)
+        self.assertTrue(ok)
+        self.assertIn("skipped", message)
+        self.assertEqual(self.sensor_file.read_text(encoding="utf-8"), "mine\n")
+
+    def test_overwrite_replaces_the_file(self):
+        self.sensor_file.write_text("mine\n", encoding="utf-8")
+        ok, _ = make_sensor_file(self.video, None, True, read=self.one_second)
+        self.assertTrue(ok)
+        self.assertIn("time_seconds", self.sensor_file.read_text(encoding="utf-8"))
+
+    def test_video_without_sensor_data_is_not_a_failure(self):
+        ok, message = make_sensor_file(self.video, None, False, read=lambda video: [])
+        self.assertTrue(ok)
+        self.assertIn("no motion sensor data", message)
+        self.assertFalse(self.sensor_file.exists())
+
+    def test_sensor_error_is_a_failure(self):
+        def broken(video):
+            raise SensorError("ExifTool failed for x.mp4")
+
+        ok, message = make_sensor_file(self.video, None, False, read=broken)
+        self.assertFalse(ok)
+        self.assertIn("ExifTool failed", message)
+
+    def test_sensor_file_is_also_made_with_gps_only(self):
+        with mock.patch("pp_tt_video.pipeline.read_sensors", self.one_second):
+            process_videos([self.video], with_events=False)
+        self.assertTrue(self.sensor_file.is_file())
 
 
 class ProfileInPipelineTest(unittest.TestCase):

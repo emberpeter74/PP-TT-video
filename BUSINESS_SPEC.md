@@ -205,9 +205,9 @@ The user expects event types they cannot name yet. Requirements:
 
 ## 6. Output
 
-Two files per video: the extracted GPS track and the events file.
+Three files per video: the extracted GPS track, the motion sensor data and the events file.
 
-**Naming rule:** the created files keep the video's original file name without the `.mp4` extension. For an input `something.mp4` the module writes `something.gpx` and `something-events.txt`. The shared base name is what links the three files.
+**Naming rule:** the created files keep the video's original file name without the `.mp4` extension. For an input `something.mp4` the module writes `something.gpx`, `something-sensors.csv` and `something-events.txt`. The shared base name is what links the files.
 
 ### 6.1 GPS track (GPX file)
 
@@ -261,6 +261,18 @@ Example:
 ```
 
 The format has no place for a confidence value or other extra fields.
+
+### 6.3 Sensor data file (csv)
+
+Decided by the user: the motion sensor data is written to its own file, separate from the GPX file. Built in step V1.
+
+- A plain table (CSV) that opens in Excel: one row per measurement, about 200 per second. A 10-minute video gives about 120,000 rows and 14 MB.
+- Columns: the time in the video in seconds, the three acceleration values (m/s²) and the three rotation values (radians per second).
+- The values are exactly as the camera stored them, along the camera's own axes. They are kept raw on purpose: the rules assume a certain camera mounting, and only the raw values would show a different one.
+- The camera stores the measurements in blocks of about a second and only says when a block starts. The times of the single measurements are spread evenly over their block.
+- Written for every video, also with `--gps-only` (assumption, to confirm). Skipped when the file exists, unless `--overwrite` is given.
+- A video without motion sensor data (not a GoPro file) gets no sensor file. That is not an error.
+- The file is for the user's own analysis and for the check video. No other module depends on it yet, so its format may still change.
 
 ## 7. Quality expectations
 
