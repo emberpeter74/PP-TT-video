@@ -51,8 +51,14 @@ def with_scale(chart):
     height at every moment. It reaches twice the largest threshold, or the
     level only 0.5% of the values exceed, whichever is more. The very largest
     value is not used: a single jolt would flatten everything else.
+
+    Only the lines a rule decides on set the scale. A line shown for
+    information may be far larger; it would squeeze the rule's line and its
+    threshold to the bottom. Beyond the scale it is drawn at the edge.
+    A chart without a rule's line uses all its lines.
     """
-    sizes = [abs(value) for line in chart.lines for value in line.values]
+    scale_lines = [line for line in chart.lines if line.from_rule] or chart.lines
+    sizes = [abs(value) for line in scale_lines for value in line.values]
     high = max(
         [2 * abs(value) for _, value in chart.thresholds]
         + ([percentile(sizes, 99.5)] if sizes else [])
@@ -114,13 +120,21 @@ def turning_chart(sensor_seconds):
 def offtrack_chart(sensor_seconds):
     """What the offtrack rule looks at: how hard the car shakes up and down.
 
-    The shake is measured after smoothing, so a fast vibration of the
-    camera does not show in it (see offtrack.py).
+    The rule's line is the shake after smoothing, so a fast vibration of
+    the camera does not show in it (see offtrack.py). A second line shows
+    the shake without smoothing, for information: where it is high and the
+    rule's line is not, the camera vibrates.
     """
-    samples = shake_over_time(sensor_seconds)
+    def line(name, smoothing, from_rule):
+        samples = shake_over_time(sensor_seconds, smoothing)
+        return Line(name, [time for time, _ in samples], [shake for _, shake in samples], from_rule)
+
     return with_scale(Chart(
         title="offtrack",
-        lines=[Line("shake", [time for time, _ in samples], [shake for _, shake in samples], True)],
+        lines=[
+            line("shake", None, True),               # None: the smoothing the rule uses
+            line("shake unsmoothed", 1, False),
+        ],
         thresholds=[("min", settings.OFFTRACK_MIN_SHAKE)],
         marks=[],
     ))

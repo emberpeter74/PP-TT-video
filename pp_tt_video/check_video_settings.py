@@ -85,6 +85,10 @@ SHOW_STRIP = True
 #   "offtrack"  how hard the car shakes up and down (thick yellow line), with
 #               its threshold. Only slow shaking is in it: a fast vibration
 #               of the camera is smoothed away first, as the rule does.
+#               The thin green line is the shake without smoothing, for
+#               information: where it is high and the yellow line is not,
+#               the camera vibrates. It is often beyond the chart's scale
+#               and then runs along the top edge.
 STRIP_CHARTS = ["pace", "sliding", "turning", "offtrack"]
 
 # True: the rules' thresholds are drawn as dashed lines, with their value.

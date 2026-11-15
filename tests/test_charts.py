@@ -8,12 +8,14 @@ import unittest
 from pp_tt_video import settings
 from pp_tt_video.charts import (
     CHARTS,
+    Chart,
     Line,
     offtrack_chart,
     pace_chart,
     sliding_chart,
     turning_chart,
     window,
+    with_scale,
 )
 from pp_tt_video.offtrack import shake_over_time
 from pp_tt_video.profile import Profile, using_profile
@@ -102,13 +104,24 @@ class OfftrackChartTest(unittest.TestCase):
                      second_of(2, 0.0, 0.0, down=calm)]
         self.chart = offtrack_chart(self.data)
 
-    def test_one_rule_line(self):
-        self.assertEqual([(line.name, line.from_rule) for line in self.chart.lines], [("shake", True)])
+    def test_one_rule_line_and_one_information_line(self):
+        self.assertEqual([(line.name, line.from_rule) for line in self.chart.lines],
+                         [("shake", True), ("shake unsmoothed", False)])
 
     def test_rule_line_is_what_the_rule_measures(self):
         shake = line_named(self.chart, "shake")
         self.assertEqual(list(zip(shake.times, shake.values)), shake_over_time(self.data))
         self.assertGreater(max(shake.values), 1.0)
+
+    def test_information_line_is_the_shake_without_smoothing(self):
+        unsmoothed = line_named(self.chart, "shake unsmoothed")
+        self.assertEqual(list(zip(unsmoothed.times, unsmoothed.values)), shake_over_time(self.data, smoothing=1))
+
+    def test_fast_vibration_shows_only_in_the_information_line(self):
+        # The camera's vibration: the force jumps with every measurement.
+        chart = offtrack_chart([second_of(0, 0.0, 0.0, down=(-4.8, -14.8) * 50)])
+        self.assertLess(max(line_named(chart, "shake").values), 0.1)
+        self.assertAlmostEqual(max(line_named(chart, "shake unsmoothed").values), 5.0)
 
     def test_threshold_follows_the_profile(self):
         self.assertEqual(self.chart.thresholds, [("min", settings.OFFTRACK_MIN_SHAKE)])
@@ -125,6 +138,21 @@ class ScaleTest(unittest.TestCase):
         # 1000 quiet seconds and a single jolt of 400.
         chart = pace_chart(driving([(0.2, 0.0)] * 500 + [(400.0, 0.0)] + [(0.2, 0.0)] * 500))
         self.assertLess(chart.high, 50)
+
+    def test_information_lines_do_not_set_the_scale(self):
+        # Otherwise a large information line would squeeze the rule's line
+        # and its threshold to the bottom of the chart.
+        times = [float(time) for time in range(100)]
+        chart = with_scale(Chart("x", [
+            Line("rule", times, [2.0] * 100, True),
+            Line("information", times, [50.0] * 100, False),
+        ], [("min", 2.2)], []))
+        self.assertEqual(chart.high, 4.4)
+
+    def test_chart_of_information_lines_only_still_gets_a_scale(self):
+        times = [float(time) for time in range(100)]
+        chart = with_scale(Chart("x", [Line("information", times, [50.0] * 100, False)], [], []))
+        self.assertEqual(chart.high, 50.0)
 
     def test_chart_with_values_on_both_sides_is_centred(self):
         chart = sliding_chart(caught_slide())

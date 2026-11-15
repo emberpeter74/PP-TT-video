@@ -163,14 +163,14 @@ def draw_chart(draw, chart, area, time_seconds):
     # iter() hands out the colours one after the other.
     colours = iter(LINE_COLOURS)
     information_colours = iter(INFORMATION_COLOURS)
-    names = []
-    for line in chart.lines:
-        colour = next(colours) if line.from_rule else next(information_colours)
+    coloured = [(line, next(colours) if line.from_rule else next(information_colours)) for line in chart.lines]
+    names = [(line.name, colour) for line, colour in coloured]
+    # The information lines are drawn first, so the rule's lines lie on top.
+    for line, colour in sorted(coloured, key=lambda pair: pair[0].from_rule):
         times, values = window(line, start, end)
         points = [(x_of(time), y_of(value)) for time, value in zip(times, values)]
         if len(points) > 1:
             draw.line(points, fill=colour, width=2 if line.from_rule else 1)
-        names.append((line.name, colour))
 
     # The moments the rule noticed something: small ticks along the top.
     for mark in chart.marks[bisect_left(chart.marks, start):bisect_right(chart.marks, end)]:
