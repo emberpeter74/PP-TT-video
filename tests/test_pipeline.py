@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from pp_tt_video import settings
+from pp_tt_video import check_video_settings, settings
 from pp_tt_video.detect_cars import CarBox
 from pp_tt_video.detections_file import Detections, load_detections
 from pp_tt_video.pipeline import find_videos, make_sensor_file, process_videos
@@ -350,6 +350,53 @@ class DetectionsInPipelineTest(unittest.TestCase):
             self.run_module("check", check_video=True)
         self.assertEqual(len(self.drawn), 1)
         self.assertEqual(self.drawn[0][2].sensor_seconds, [])
+
+    def test_overview_is_written_with_the_check_video(self):
+        output = self.run_module("check", check_video=True)
+        self.assertTrue((output / "x-overview.png").is_file())
+
+    def test_overview_uses_the_profile(self):
+        (self.folder / "profile.toml").write_text("PACE_MIN_EFFORT = 0.5\n", encoding="utf-8")
+        written = []   # per overview: (profile name, pace value in force, video name)
+
+        def fake_write_overview(path, explanation, profile_name, video_name):
+            written.append((profile_name, settings.PACE_MIN_EFFORT, video_name))
+
+        with mock.patch("pp_tt_video.overview.write_overview", fake_write_overview):
+            self.run_module("check", check_video=True)
+        self.assertEqual(written, [(self.folder.name, 0.5, "x.mp4")])
+
+    def test_without_the_option_no_overview_is_made(self):
+        output = self.run_module("plain")
+        self.assertFalse((output / "x-overview.png").exists())
+
+    def test_overview_can_be_switched_off(self):
+        with mock.patch.object(check_video_settings, "WRITE_OVERVIEW", False):
+            output = self.run_module("check", check_video=True)
+        self.assertTrue((output / "x-check.mp4").is_file())
+        self.assertFalse((output / "x-overview.png").exists())
+
+    def test_missing_overview_is_made_without_drawing_the_video_again(self):
+        output = self.run_module("check", check_video=True)
+        (output / "x-overview.png").unlink()
+        self.run_module("check", check_video=True)
+        self.assertTrue((output / "x-overview.png").is_file())
+        self.assertEqual(len(self.drawn), 1)       # the check video was left alone
+        self.assertEqual(self.detection_runs, 1)   # and the saved detections were used
+
+    def test_existing_overview_is_kept(self):
+        output = self.run_module("check", check_video=True)
+        (output / "x-overview.png").write_bytes(b"kept")
+        (output / "x-check.mp4").unlink()
+        self.run_module("check", check_video=True)
+        self.assertEqual((output / "x-overview.png").read_bytes(), b"kept")
+        self.assertEqual(len(self.drawn), 2)
+
+    def test_overwrite_replaces_the_overview(self):
+        output = self.run_module("check", check_video=True)
+        (output / "x-overview.png").write_bytes(b"old")
+        self.run_module("check", check_video=True, overwrite=True)
+        self.assertNotEqual((output / "x-overview.png").read_bytes(), b"old")
 
     def test_events_file_is_the_same_with_and_without_the_option(self):
         plain = self.run_module("plain")

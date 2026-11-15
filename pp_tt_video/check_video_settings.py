@@ -99,3 +99,21 @@ STRIP_SECONDS_AFTER = 2
 # The height of the strip in pixels, shared by its charts (for a picture
 # 1280 pixels wide; a smaller picture gets a smaller strip).
 STRIP_HEIGHT = 320
+
+# --- The overview picture -----------------------------------------------------------
+
+# True: besides the check video, one picture of the whole video is written
+# (name-overview.png), with time running from left to right:
+#   pace        the braking and accelerating force (thin) and the effort
+#               (thick), with the pace rule's thresholds, in front of
+#               coloured bands: out of session, warm up, at pace, cooling,
+#               crash
+#   too brief   where the effort was above its threshold, but for too short
+#               a time to count as driving at pace
+#   one row per event: filled bars are events that were kept, outlines are
+#               events that were found and thrown away
+#   cars        every car that was followed; an outline is a car the model
+#               was never sure of, which the car rules skip
+# It shows what a few seconds of video cannot: why a whole video came out
+# as warm up, or how many offtracks there are and where.
+WRITE_OVERVIEW = True

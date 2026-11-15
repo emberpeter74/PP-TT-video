@@ -168,7 +168,8 @@ class EventsMaker:
 
     def make_check_video(self, video, output_folder, overwrite, profile=BUILT_IN,
                          on_progress=None, on_drawing=None):
-        """Write the check video of a video. Returns (ok, message).
+        """Write the check video and the overview picture of a video.
+        Returns (ok, message).
 
         The detections come from this run's detection, or from the file an
         earlier run saved, or (when the events file existed and was skipped)
@@ -182,12 +183,23 @@ class EventsMaker:
         try:
             # Imported here: the drawing needs Pillow, which comes with the
             # detection libraries and may be missing on another PC.
-            from pp_tt_video import check_video
+            from pp_tt_video import check_video, check_video_settings, overview
             from pp_tt_video.explain import explain
 
             path = check_video.check_video_path_for(video, output_folder)
-            if path.exists() and not overwrite:
-                return True, "check video already exists, skipped"
+            overview_path = overview.overview_path_for(video, output_folder)
+            # Each of the two is made unless it exists already. So an
+            # overview that is missing next to an older check video is added
+            # without drawing the video again.
+            video_wanted = overwrite or not path.exists()
+            overview_wanted = check_video_settings.WRITE_OVERVIEW and (overwrite or not overview_path.exists())
+            messages = []
+            if not video_wanted:
+                messages.append("check video already exists, skipped")
+            if check_video_settings.WRITE_OVERVIEW and not overview_wanted:
+                messages.append("overview picture already exists, skipped")
+            if not video_wanted and not overview_wanted:
+                return True, "; ".join(messages)
             detections = self.detections_for(video, output_folder, overwrite, on_progress, keep_file=True)
             duration_seconds = read_video_info(video).duration_seconds
             try:
@@ -198,8 +210,14 @@ class EventsMaker:
             # use the profile's values.
             with using_profile(profile):
                 explanation = explain(detections, sensor_seconds, duration_seconds)
-                check_video.write_check_video(video, path, explanation, profile.name, on_drawing)
-            return True, f"check video written to {path.name}"
+                # The overview first: it takes a moment, the video minutes.
+                if overview_wanted:
+                    overview.write_overview(overview_path, explanation, profile.name, Path(video).name)
+                    messages.append(f"overview picture written to {overview_path.name}")
+                if video_wanted:
+                    check_video.write_check_video(video, path, explanation, profile.name, on_drawing)
+                    messages.append(f"check video written to {path.name}")
+            return True, "; ".join(messages)
         except ImportError as error:
             return False, f"detection libraries are not installed ({error})"
         except VideoError as error:

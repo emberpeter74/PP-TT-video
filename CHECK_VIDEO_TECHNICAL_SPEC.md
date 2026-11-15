@@ -1,6 +1,6 @@
 # Check video: technical specification
 
-Status: draft for the author's approval. Items marked **(assumption)** are the assistant's calls; the author can correct them.
+Status: approved by the author; steps V1 to V6 are built (see section 11). Items marked **(assumption)** are the assistant's calls; the author can correct them.
 
 What the check video must do is in `CHECK_VIDEO_BUSINESS_SPEC.md`. This document says how it is built. It builds on the module described in `TECHNICAL_SPEC.md`.
 
@@ -50,7 +50,9 @@ New files in `pp_tt_video/`, each small:
 | `detections_file.py` | Saves and loads `name-detections.json` |
 | `explain.py` | Runs the tracker and the rules on saved data and collects what the drawing needs: kept and thrown-away boxes with reasons, tracks, kept and thrown-away events with reasons, and the chart values |
 | `draw.py` | Draws one picture: boxes, labels, the event line and the sensor strip |
-| `check_video.py` | Reads the video, has every picture drawn, writes the check video; draws the overview picture |
+| `charts.py` | The values and thresholds of each sensor rule, for the strip and the overview |
+| `check_video.py` | Reads the video, has every picture drawn, writes the check video |
+| `overview.py` | Draws and writes the overview picture |
 
 Changes to existing files, kept as small as possible:
 
@@ -111,6 +113,16 @@ One PNG, drawn with Pillow, about 2000 pixels wide, time along the bottom:
 - one row per event type: kept events as filled bars, thrown-away ones as outlines,
 - one row of bars for the tracked cars.
 
+As built (step V6, `overview.py`):
+
+- 2000 pixels wide; the height grows with the number of event rows (about 550 pixels). Written as `name-overview.png`, about 45 KB, in 1 to 2 seconds.
+- **The pace part** uses the pace chart of the strip (`charts.py`): the force per second as a thin line, the effort as a thick one, the two thresholds named at the right edge. Behind them the bands: every session part in its colour, and what no session part covers as "at pace". Without sensor data it only says so.
+- **"Too brief"**, a row of marks under the pace part: where the effort was above `PACE_MIN_EFFORT` for less than `PACE_MIN_SECONDS`, so it did not count as at pace.
+- **Event rows:** one per label that occurs, in the order of `event_types.csv`. Kept events are filled bars, thrown-away ones outlines. A bar is at least 3 pixels wide, so an event of one second can be seen.
+- **Cars:** one bar per car that was followed, with the number of cars in the row's name. A car the model was never sure of (skipped by the car rules) is an outline.
+- **Time line:** a tick per minute; the times are written every 1, 2, 5, ... minutes, so that they never run into each other.
+- It is made by `make_check_video`, inside the same `using_profile` block. The check video and the overview are each made unless they exist: an overview missing next to an older check video is added from the saved detections without drawing the video again (without a detections file it needs a detection pass). `WRITE_OVERVIEW = False` switches it off.
+
 ## 7. The settings file
 
 `pp_tt_video/check_video_settings.py`, a Python file like `settings.py`, but only for the check video. **(Assumption: a Python file rather than another format, because the author already knows `settings.py`; every setting gets a comment line saying what it does and what values it takes.)**
@@ -132,7 +144,10 @@ A first list:
 | `SHOW_THRESHOLDS` | Draw the threshold lines | True |
 | `STRIP_SECONDS_BEFORE`, `STRIP_SECONDS_AFTER` | The time window of the strip | 8, 2 |
 | `STRIP_HEIGHT` | Height of the strip in pixels | 320 |
-| `VIDEO_QUALITY` | How strongly the video is compressed; lower is better and larger | 28 || `WRITE_OVERVIEW` | Write the overview picture | True |
+| `VIDEO_QUALITY` | How strongly the video is compressed; lower is better and larger | 28 |
+| `WRITE_OVERVIEW` | Write the overview picture | True |
+
+`BOX_SMOOTHING` is not built: it belongs to step V7, which the author skipped (section 11).
 
 Colours and fonts stay in the code at first; they can move to the file if the author wants to change them.
 
@@ -177,6 +192,17 @@ Before step 9 of `TECHNICAL_SPEC.md`, after the profile steps P1 and P2. One com
 - **V5.** Sensor strip.
 - **V6.** Overview picture.
 - **V7.** Box smoothing, if the author finds the boxes too jumpy after V3.
+
+**State: V1 to V6 are built. V7 is skipped:** the author watched the check video and found the boxes fine as they are (held between two analysed pictures).
+
+Measured with everything drawn (boxes, events, the strip of four charts), at 30 pictures per second, 1280 pixels wide:
+
+| Video | Length | Time to make | Size |
+|---|---|---|---|
+| 12-17, from saved detections | 6:27 | 181 s (117 s without the strip) | 195 MB, 1280x1040 |
+| GX010183, with its detection pass | 17:08 | 777 s | 500 MB |
+
+So drawing takes under half of the video's length, and a first run with detection about three quarters. The target of section 9 (no longer than the video itself) is met.
 
 ## 12. Left to the builder
 

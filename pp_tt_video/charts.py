@@ -66,7 +66,12 @@ def with_scale(chart):
 
 
 def pace_chart(sensor_seconds):
-    """What the pace rule looks at: the braking and accelerating force."""
+    """What the pace rule looks at: the braking and accelerating force.
+
+    The order matters: the overview picture (overview.py) takes the force
+    as the first line, the effort as the second, and the pace threshold as
+    the first threshold.
+    """
     times = [second.start_seconds for second in sensor_seconds]
     forces = forward_force_per_second(sensor_seconds)
     return with_scale(Chart(
