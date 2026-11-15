@@ -8,7 +8,7 @@ from unittest import mock
 from pp_tt_video import check_video_settings, settings
 from pp_tt_video.check_video import check_video_path_for, write_check_video
 from pp_tt_video.detect_cars import CarBox
-from pp_tt_video.draw import picture_size
+from pp_tt_video.draw import full_picture_size
 from pp_tt_video.explain import explain
 from pp_tt_video.video import VideoWriter, read_frames, read_video_info
 from tests.helpers import detections_of, pictures_of
@@ -57,7 +57,10 @@ class WriteCheckVideoTest(unittest.TestCase):
         progress = []
         write_check_video(self.source, output, self.explanation, "built-in values", progress.append)
         info = read_video_info(output)
-        self.assertEqual((info.width, info.height), picture_size(320, 180, 0))
+        # 320 wide is a quarter of the usual 1280, so the strip is a quarter
+        # of its 320 pixels: 180 + 80.
+        self.assertEqual((info.width, info.height), (320, 260))
+        self.assertEqual((info.width, info.height), full_picture_size(320, 180))
         self.assertAlmostEqual(info.duration_seconds, 2.0, delta=0.3)
         self.assertAlmostEqual(progress[-1], 1.0, delta=0.1)
         self.assertEqual(sorted(entry.name for entry in self.folder.iterdir()), ["source-check.mp4", "source.mp4"])

@@ -12,8 +12,9 @@ from PIL import Image
 
 from pp_tt_video import check_video_settings
 from pp_tt_video.detect_cars import CarBox
-from pp_tt_video.draw import draw_picture, picture_size
+from pp_tt_video.draw import draw_picture, full_picture_size, picture_size
 from pp_tt_video.explain import explain
+from pp_tt_video.profile import Profile, using_profile
 from tests.helpers import car_box, detections_of, pictures_of
 from tests.test_explain import VIDEO_SECONDS, gentle_driving, hard_driving, overtaken_car
 
@@ -54,7 +55,7 @@ class DrawPictureTest(unittest.TestCase):
         return draw_picture(black_picture(), time_seconds, explanation or self.explanation, profile_name)
 
     def test_drawn_picture_has_the_right_size(self):
-        self.assertEqual(self.draw().size, picture_size(1280, 720, 0))
+        self.assertEqual(self.draw().size, full_picture_size(1280, 720))
 
     def test_the_given_picture_is_not_changed(self):
         picture = black_picture()
@@ -111,6 +112,62 @@ class DrawPictureTest(unittest.TestCase):
     def test_video_without_any_car_does_not_fail(self):
         empty = explain(detections_of([(0.0, [])]), [], 10.0)
         self.assertEqual(self.draw(explanation=empty).getpixel(EDGE), BLACK)
+
+
+class StripTest(unittest.TestCase):
+    """The sensor strip sits below the video picture (rows 720 and down)."""
+
+    STRIP = (0, 720, 1280, 720 + 320)
+
+    def setUp(self):
+        self.explanation = explain(detections_of([(0.0, [])]), hard_driving(), VIDEO_SECONDS)
+
+    def strip(self, time_seconds=100.0, explanation=None):
+        drawn = draw_picture(black_picture(), time_seconds, explanation or self.explanation, "x")
+        return drawn.crop(self.STRIP)
+
+    def test_picture_is_taller_by_the_strip(self):
+        drawn = draw_picture(black_picture(), 100.0, self.explanation, "x")
+        self.assertEqual(drawn.size, (1280, 720 + 320))
+        self.assertEqual(drawn.size, full_picture_size(1280, 720))
+
+    def test_strip_is_drawn_below_the_picture(self):
+        self.assertGreater(len(self.strip().getcolors(maxcolors=100000)), 5)
+
+    def test_strip_moves_with_the_time(self):
+        self.assertNotEqual(self.strip(100.0).tobytes(), self.strip(103.0).tobytes())
+
+    def test_threshold_line_is_at_the_profile_value(self):
+        built_in = self.strip()
+        with using_profile(Profile("x", None, {"OFFTRACK_MIN_SHAKE": 3.5})):
+            # The explanation is made again: the charts take their thresholds
+            # from the settings at that moment.
+            halved = self.strip(explanation=explain(detections_of([(0.0, [])]), hard_driving(), VIDEO_SECONDS))
+        self.assertNotEqual(built_in.tobytes(), halved.tobytes())
+
+    def test_thresholds_can_be_switched_off(self):
+        with setting("SHOW_THRESHOLDS", False):
+            without = self.strip()
+        self.assertNotEqual(without.tobytes(), self.strip().tobytes())
+
+    def test_only_the_named_charts_are_drawn(self):
+        with setting("STRIP_CHARTS", ["pace"]):
+            one = self.strip()
+        self.assertNotEqual(one.tobytes(), self.strip().tobytes())
+
+    def test_no_sensor_data_says_so(self):
+        no_sensors = explain(detections_of([(0.0, [])]), [], 10.0)
+        strip = self.strip(5.0, no_sensors)
+        self.assertNotEqual(strip.getextrema(), ((0, 0), (0, 0), (0, 0)))
+
+    def test_time_past_the_sensor_data_does_not_fail(self):
+        self.strip(VIDEO_SECONDS + 50.0)
+
+    def test_strip_can_be_switched_off(self):
+        with setting("SHOW_STRIP", False):
+            drawn = draw_picture(black_picture(), 100.0, self.explanation, "x")
+            self.assertEqual(drawn.size, (1280, 720))
+            self.assertEqual(full_picture_size(1280, 720), (1280, 720))
 
 
 def is_grey(pixel):

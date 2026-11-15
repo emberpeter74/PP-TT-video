@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from pp_tt_video import settings
 from pp_tt_video.car_events import events_of_tracks, smooth
+from pp_tt_video.charts import CHARTS
 from pp_tt_video.detect_cars import keep_car_boxes
 from pp_tt_video.detect_events import combine_stretches, sensor_stretches
 from pp_tt_video.event_types import load_event_types
@@ -74,6 +75,7 @@ class Explanation:
     session_parts: list       # Stretches: out of session, warm up, cooling, crash
     duration_seconds: float
     sensor_seconds: list      # the motion sensor data; empty if the video has none
+    charts: dict              # name -> Chart for the sensor strip; empty without sensor data
 
 
 def state_of(height_part):
@@ -165,6 +167,9 @@ def explain(detections, sensor_seconds, duration_seconds):
         session_parts=session_parts,
         duration_seconds=duration_seconds,
         sensor_seconds=sensor_seconds,
+        # Made here, while the profile is in force: the charts take the
+        # rules' thresholds from the settings at this moment.
+        charts={name: make_chart(sensor_seconds) for name, make_chart in CHARTS.items()} if sensor_seconds else {},
     )
 
 

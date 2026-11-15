@@ -63,3 +63,39 @@ SHOW_EVENTS = True
 # "dropped: sliding (outside the part at pace)". Events are only kept in the
 # part of the video that is driven at pace.
 SHOW_DROPPED_EVENTS = True
+
+# --- The sensor strip ---------------------------------------------------------------
+
+# True: below the picture a strip shows the motion sensor values the rules
+# look at, moving along with the video, with each rule's threshold drawn as
+# a dashed line. False: no strip; the check video is as tall as the picture.
+SHOW_STRIP = True
+
+# Which charts the strip has, from top to bottom. Leave one out to hide it.
+#   "pace"      braking and accelerating force (yellow) and its average
+#               over time, the "effort" (blue). Thresholds: the effort
+#               from which the car counts as at pace, and the force that
+#               marks the first and last moment at pace.
+#   "sliding"   the cornering force. A slide is only looked for in corners
+#               above the threshold. Marks along the top: the moments the
+#               car turned against the corner (the catch of a slide).
+#   "turning"   how fast the car turns. Goes with "sliding": before a catch
+#               the car must have turned into the corner faster than the
+#               threshold.
+#   "offtrack"  how hard the car shakes up and down (thick yellow line), with
+#               its threshold. The two thin lines are the shake sideways
+#               (green) and forward (brown): shown for information, the rule
+#               does not use them.
+STRIP_CHARTS = ["pace", "sliding", "turning", "offtrack"]
+
+# True: the rules' thresholds are drawn as dashed lines, with their value.
+SHOW_THRESHOLDS = True
+
+# How many seconds the strip shows before and after the moment of the
+# picture. The vertical line marks "now".
+STRIP_SECONDS_BEFORE = 8
+STRIP_SECONDS_AFTER = 2
+
+# The height of the strip in pixels, shared by its charts (for a picture
+# 1280 pixels wide; a smaller picture gets a smaller strip).
+STRIP_HEIGHT = 320

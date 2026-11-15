@@ -19,13 +19,17 @@ from pp_tt_video.sensors import pieces_of_seconds
 from pp_tt_video.stretch import Stretch
 
 
-def shake_over_time(sensor_seconds):
+def shake_over_time(sensor_seconds, axis=None):
     """Return a list of (time, shake), several per second.
 
     The shake is the standard deviation of the up-and-down force: a number
     that says how far the measurements lie from their own average.
+
+    axis: the rule looks up and down, which is what is measured when no axis
+    is given. The check video also shows the shake along the other two axes.
     """
-    axis = settings.ACCELERATION_AXIS_DOWN
+    if axis is None:
+        axis = settings.ACCELERATION_AXIS_DOWN
     samples = []
     for time, acceleration, _ in pieces_of_seconds(sensor_seconds, settings.OFFTRACK_SAMPLES_PER_SECOND):
         samples.append((time, pstdev([measurement[axis] for measurement in acceleration])))

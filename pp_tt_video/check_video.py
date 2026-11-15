@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image
 
 from pp_tt_video import check_video_settings
-from pp_tt_video.draw import draw_picture, picture_size
+from pp_tt_video.draw import draw_picture, full_picture_size
 from pp_tt_video.video import VideoWriter, analysis_size, read_frames, read_video_info
 
 
@@ -35,7 +35,7 @@ def write_check_video(video_path, output_path, explanation, profile_name, on_pro
     """
     info = read_video_info(video_path)
     frames_per_second = check_video_settings.FRAMES_PER_SECOND
-    width, height = picture_size(*analysis_size(info), 0)
+    width, height = full_picture_size(*analysis_size(info))
     sound_from = video_path if check_video_settings.KEEP_SOUND else None
 
     with VideoWriter(output_path, width, height, frames_per_second, sound_from=sound_from,

@@ -8,11 +8,13 @@ The drawing is done with Pillow, a library for working with pictures. It
 was installed together with the detection libraries.
 """
 
+from bisect import bisect_left, bisect_right
 from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFont
 
 from pp_tt_video import check_video_settings
+from pp_tt_video.charts import window
 from pp_tt_video.events import format_time
 from pp_tt_video.explain import boxes_at, dropped_at, labels_at
 
@@ -25,6 +27,16 @@ STATE_COLOURS = {
 TEXT_COLOUR = (255, 255, 255)
 TEXT_BACKGROUND = (0, 0, 0)
 DROPPED_COLOUR = (170, 170, 170)   # grey: what was thrown away
+
+# The sensor strip.
+STRIP_BACKGROUND = (18, 18, 22)
+STRIP_BORDER = (70, 70, 80)
+THRESHOLD_COLOUR = (255, 255, 255)
+NOW_COLOUR = (255, 255, 255)
+MARK_COLOUR = (255, 60, 60)
+LINE_COLOURS = [(255, 210, 0), (0, 220, 255), (255, 130, 255)]   # the rules' lines
+INFORMATION_COLOURS = [(110, 200, 110), (200, 140, 90)]          # lines shown for information
+STRIP_TEXT_SIZE = 15
 
 # Sizes are given for a picture 1280 pixels wide and grow or shrink with
 # the picture, so a smaller check video is still readable.
@@ -56,6 +68,18 @@ def picture_size(video_width, video_height, strip_height):
 def scaled(value, picture_width):
     """Turn a size meant for a 1280 wide picture into one for this picture."""
     return max(1, round(value * picture_width / REFERENCE_WIDTH))
+
+
+def strip_height(picture_width):
+    """The height of the sensor strip for a picture of this width; 0 if it is switched off."""
+    if not check_video_settings.SHOW_STRIP:
+        return 0
+    return scaled(check_video_settings.STRIP_HEIGHT, picture_width)
+
+
+def full_picture_size(video_width, video_height):
+    """The (width, height) of a check video picture, with the strip the settings ask for."""
+    return picture_size(video_width, video_height, strip_height(video_width))
 
 
 def write_text(draw, position, text, size, anchor="la", colour=TEXT_COLOUR):
@@ -99,6 +123,84 @@ def draw_dropped_boxes(draw, boxes, picture_width):
                        anchor="la", colour=DROPPED_COLOUR)
 
 
+def dashed_line(draw, left, right, y, colour):
+    """Draw a level line of short dashes."""
+    for x in range(int(left), int(right), 12):
+        draw.line((x, y, min(x + 6, right), y), fill=colour, width=1)
+
+
+def draw_chart(draw, chart, area, time_seconds):
+    """Draw one chart of the strip into its area (left, top, right, bottom)."""
+    left, top, right, bottom = area
+    width = right - left
+    text_size = scaled(STRIP_TEXT_SIZE, width)
+    start = time_seconds - check_video_settings.STRIP_SECONDS_BEFORE
+    end = time_seconds + check_video_settings.STRIP_SECONDS_AFTER
+
+    def x_of(time):
+        return left + (time - start) / (end - start) * width
+
+    def y_of(value):
+        # The largest value of the scale lies at the top edge. Values beyond
+        # the scale are drawn at the edge, so they stay inside their chart.
+        part = (value - chart.low) / (chart.high - chart.low)
+        return bottom - 2 - min(1.0, max(0.0, part)) * (bottom - top - 4)
+
+    draw.rectangle(area, fill=STRIP_BACKGROUND)
+    draw.line((left, top, right, top), fill=STRIP_BORDER)   # a rule between two charts
+    if chart.low < 0:
+        draw.line((left, y_of(0), right, y_of(0)), fill=STRIP_BORDER)   # the zero line
+
+    if check_video_settings.SHOW_THRESHOLDS:
+        for label, value in chart.thresholds:
+            y = y_of(value)
+            dashed_line(draw, left, right, y, THRESHOLD_COLOUR)
+            # A threshold below zero is the mirror of one above: its value says enough.
+            text = f"{label} {value:g}" if value >= 0 else f"{value:g}"
+            draw.text((right - 4, y - 1), text, font=font_of_size(text_size), anchor="rd", fill=THRESHOLD_COLOUR)
+
+    # The rule's own lines are thick and bright, the information lines thin.
+    # iter() hands out the colours one after the other.
+    colours = iter(LINE_COLOURS)
+    information_colours = iter(INFORMATION_COLOURS)
+    names = []
+    for line in chart.lines:
+        colour = next(colours) if line.from_rule else next(information_colours)
+        times, values = window(line, start, end)
+        points = [(x_of(time), y_of(value)) for time, value in zip(times, values)]
+        if len(points) > 1:
+            draw.line(points, fill=colour, width=2 if line.from_rule else 1)
+        names.append((line.name, colour))
+
+    # The moments the rule noticed something: small ticks along the top.
+    for mark in chart.marks[bisect_left(chart.marks, start):bisect_right(chart.marks, end)]:
+        draw.line((x_of(mark), top + 1, x_of(mark), top + scaled(10, width)), fill=MARK_COLOUR, width=2)
+
+    # The names of the lines, each in its own colour, in the top left corner.
+    x = left + 4
+    for name, colour in names:
+        draw.text((x, top + 3), name, font=font_of_size(text_size), fill=colour)
+        x += draw.textlength(name, font=font_of_size(text_size)) + scaled(16, width)
+
+    draw.line((x_of(time_seconds), top, x_of(time_seconds), bottom), fill=NOW_COLOUR, width=1)   # "now"
+
+
+def draw_strip(draw, area, time_seconds, explanation):
+    """Draw the sensor strip into its area: one chart below the other."""
+    left, top, right, bottom = area
+    draw.rectangle(area, fill=STRIP_BACKGROUND)
+    charts = [explanation.charts[name] for name in check_video_settings.STRIP_CHARTS if name in explanation.charts]
+    if not charts:
+        text = "no sensor data" if not explanation.charts else "no charts chosen"
+        draw.text((left + 8, top + 8), text, font=font_of_size(scaled(INFO_TEXT_SIZE, right - left)),
+                  fill=DROPPED_COLOUR)
+        return
+    height = (bottom - top) / len(charts)
+    for number, chart in enumerate(charts):
+        draw_chart(draw, chart, (left, round(top + number * height), right, round(top + (number + 1) * height)),
+                   time_seconds)
+
+
 def draw_picture(image, time_seconds, explanation, profile_name):
     """Return a new picture: the given one with the module's work drawn over it.
 
@@ -107,11 +209,15 @@ def draw_picture(image, time_seconds, explanation, profile_name):
     explanation:   what the rules did with the video (see explain.py).
     profile_name:  the driver and car profile in force.
     """
-    width, height = picture_size(image.width, image.height, 0)
+    width, height = full_picture_size(image.width, image.height)
     picture = Image.new("RGB", (width, height))   # starts black
     picture.paste(image, (0, 0))
     draw = ImageDraw.Draw(picture)
     margin = scaled(MARGIN, width)
+
+    # The sensor strip, below the video picture.
+    if height > image.height:
+        draw_strip(draw, (0, image.height, width, height), time_seconds, explanation)
 
     boxes = boxes_at(explanation, time_seconds)
     # The thrown-away boxes go first, so the kept ones are drawn over them.

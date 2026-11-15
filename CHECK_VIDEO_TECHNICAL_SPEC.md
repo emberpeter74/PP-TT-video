@@ -91,8 +91,16 @@ A window of `STRIP_SECONDS_BEFORE` and `STRIP_SECONDS_AFTER` around the current 
 | Chart | Values | Threshold lines | Source |
 |---|---|---|---|
 | Pace | forward force per second; pace effort | `PACE_MIN_EFFORT`, `PACE_HARD_FORCE` | `forward_force_per_second`, `effort_per_second` |
-| Sliding | cornering force; turning rate; marks at catch moments | `±SLIDE_MIN_CORNERING_FORCE`, `SLIDE_MIN_TURNING_BEFORE` | `cornering_and_turning`, `find_catch_times` |
-| Offtrack | shake | `OFFTRACK_MIN_SHAKE` | `shake_over_time` |
+| Sliding | cornering force; marks at catch moments | `±SLIDE_MIN_CORNERING_FORCE` | `cornering_and_turning`, `find_catch_times` |
+| Turning | turning rate; the same marks | `±SLIDE_MIN_TURNING_BEFORE` | `cornering_and_turning`, `find_catch_times` |
+| Offtrack | shake up and down (the rule's); shake sideways and forward (information only) | `OFFTRACK_MIN_SHAKE` | `shake_over_time` |
+
+As built (step V5, `charts.py`):
+
+- **Turning is a chart of its own.** It is measured in radians per second (about ±0.5), the cornering force in m/s² (about ±11): on one scale the turning line would be flat.
+- **The offtrack chart has two extra lines, for information only:** the shake sideways and forward. The rule does not use them. Added after step P2: the false offtracks on the son's footage shake up and down only, the real ones in every direction, and the rework of the rule needs to see that.
+- **Each chart has one fixed scale for the whole video**, so a value has the same height at every moment: up to twice its largest threshold, or the level only 0.5% of its values exceed, whichever is more. Values beyond the scale are drawn at the edge. The largest value is not used: one jolt would flatten everything else.
+- The charts are made inside `explain`, so inside `using_profile`: their thresholds are the profile's.
 
 ### 6.4 Overview picture
 
@@ -120,11 +128,11 @@ A first list:
 | `SHOW_EVENTS` | Write the current labels across the top | True |
 | `SHOW_DROPPED_EVENTS` | Also write the events that were thrown away | True |
 | `SHOW_STRIP` | Draw the sensor strip | True |
-| `STRIP_CHARTS` | Which charts, in which order: `"pace"`, `"sliding"`, `"offtrack"` | all three |
+| `STRIP_CHARTS` | Which charts, in which order: `"pace"`, `"sliding"`, `"turning"`, `"offtrack"` | all four |
 | `SHOW_THRESHOLDS` | Draw the threshold lines | True |
 | `STRIP_SECONDS_BEFORE`, `STRIP_SECONDS_AFTER` | The time window of the strip | 8, 2 |
-| `STRIP_HEIGHT` | Height of the strip in pixels | 240 |
-| `WRITE_OVERVIEW` | Write the overview picture | True |
+| `STRIP_HEIGHT` | Height of the strip in pixels | 320 |
+| `VIDEO_QUALITY` | How strongly the video is compressed; lower is better and larger | 28 || `WRITE_OVERVIEW` | Write the overview picture | True |
 
 Colours and fonts stay in the code at first; they can move to the file if the author wants to change them.
 
