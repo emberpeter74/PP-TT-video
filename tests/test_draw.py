@@ -15,6 +15,7 @@ from pp_tt_video.detect_cars import CarBox
 from pp_tt_video.draw import draw_picture, picture_size
 from pp_tt_video.explain import explain
 from tests.helpers import car_box, detections_of, pictures_of
+from tests.test_explain import VIDEO_SECONDS, gentle_driving, hard_driving, overtaken_car
 
 BLACK = (0, 0, 0)
 BOX = CarBox(100, 300, 300, 450, 0.95)   # 150 of 720 pixels tall: "passing"
@@ -110,6 +111,79 @@ class DrawPictureTest(unittest.TestCase):
     def test_video_without_any_car_does_not_fail(self):
         empty = explain(detections_of([(0.0, [])]), [], 10.0)
         self.assertEqual(self.draw(explanation=empty).getpixel(EDGE), BLACK)
+
+
+def is_grey(pixel):
+    """Grey has equal parts of red, green and blue (and is not black)."""
+    red, green, blue = pixel
+    return red == green == blue and red > 0
+
+
+class DroppedBoxesTest(unittest.TestCase):
+    COCKPIT = CarBox(200, 400, 900, 650, 0.8)   # 700 of 1280 pixels wide: "too wide"
+    COCKPIT_EDGE = (200, 525)
+    COCKPIT_MIDDLE = (550, 525)
+
+    def setUp(self):
+        self.explanation = explanation_with([[BOX] * 5, [self.COCKPIT] * 5])
+
+    def draw(self):
+        return draw_picture(black_picture(), 0.0, self.explanation, "built-in values")
+
+    def test_dropped_box_is_drawn_grey(self):
+        drawn = self.draw()
+        self.assertTrue(is_grey(drawn.getpixel(self.COCKPIT_EDGE)), drawn.getpixel(self.COCKPIT_EDGE))
+        self.assertEqual(drawn.getpixel(self.COCKPIT_MIDDLE), BLACK)
+        # The kept box next to it keeps its colour.
+        self.assertFalse(is_grey(drawn.getpixel(EDGE)))
+        self.assertNotEqual(drawn.getpixel(EDGE), BLACK)
+
+    def test_dropped_boxes_can_be_switched_off(self):
+        with setting("SHOW_DROPPED_BOXES", False):
+            drawn = self.draw()
+        self.assertEqual(drawn.getpixel(self.COCKPIT_EDGE), BLACK)
+        self.assertNotEqual(drawn.getpixel(EDGE), BLACK)   # the kept box is still there
+
+    def test_dropped_boxes_show_without_the_kept_ones(self):
+        with setting("SHOW_KEPT_BOXES", False):
+            drawn = self.draw()
+        self.assertTrue(is_grey(drawn.getpixel(self.COCKPIT_EDGE)))
+        self.assertEqual(drawn.getpixel(EDGE), BLACK)
+
+    def test_unsure_car_is_drawn_grey(self):
+        unsure = explanation_with([[CarBox(100, 300, 300, 450, 0.6)] * 5])
+        drawn = draw_picture(black_picture(), 0.0, unsure, "built-in values")
+        self.assertTrue(is_grey(drawn.getpixel(EDGE)))
+
+
+class DroppedEventsTest(unittest.TestCase):
+    # Below the event line, where the dropped events are written.
+    SECOND_LINE = (0, 46, 1000, 92)
+
+    def setUp(self):
+        # A car is overtaken at 01:40, but the whole video is warm up: the
+        # overtaking is found and then dropped.
+        self.dropped = explain(detections_of(overtaken_car()), gentle_driving(), VIDEO_SECONDS)
+        self.kept = explain(detections_of(overtaken_car()), hard_driving(), VIDEO_SECONDS)
+
+    def second_line(self, explanation, time_seconds=101.5):
+        return draw_picture(black_picture(), time_seconds, explanation, "x").crop(self.SECOND_LINE)
+
+    def test_dropped_event_line_is_drawn(self):
+        self.assertNotEqual(self.second_line(self.dropped).getextrema(), ((0, 0), (0, 0), (0, 0)))
+
+    def test_dropped_event_line_is_grey(self):
+        colours = {colour for _, colour in self.second_line(self.dropped).getcolors()}
+        self.assertTrue(all(red == green == blue for red, green, blue in colours), colours)
+
+    def test_no_line_when_nothing_is_dropped(self):
+        self.assertEqual(self.second_line(self.kept).getextrema(), ((0, 0), (0, 0), (0, 0)))
+        # Nor at a moment the dropped event does not cover.
+        self.assertEqual(self.second_line(self.dropped, 50.0).getextrema(), ((0, 0), (0, 0), (0, 0)))
+
+    def test_dropped_events_can_be_switched_off(self):
+        with setting("SHOW_DROPPED_EVENTS", False):
+            self.assertEqual(self.second_line(self.dropped).getextrema(), ((0, 0), (0, 0), (0, 0)))
 
 
 if __name__ == "__main__":

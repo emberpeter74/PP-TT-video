@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from pp_tt_video import check_video_settings
 from pp_tt_video.events import format_time
-from pp_tt_video.explain import boxes_at, labels_at
+from pp_tt_video.explain import boxes_at, dropped_at, labels_at
 
 # Colours are (red, green, blue), each from 0 to 255.
 STATE_COLOURS = {
@@ -24,6 +24,7 @@ STATE_COLOURS = {
 }
 TEXT_COLOUR = (255, 255, 255)
 TEXT_BACKGROUND = (0, 0, 0)
+DROPPED_COLOUR = (170, 170, 170)   # grey: what was thrown away
 
 # Sizes are given for a picture 1280 pixels wide and grow or shrink with
 # the picture, so a smaller check video is still readable.
@@ -32,6 +33,7 @@ EVENT_TEXT_SIZE = 30
 INFO_TEXT_SIZE = 20
 BOX_TEXT_SIZE = 16
 BOX_LINE_WIDTH = 3
+DROPPED_TEXT_SIZE = 20
 MARGIN = 8
 
 
@@ -82,6 +84,21 @@ def draw_kept_boxes(draw, boxes, picture_width):
                        anchor="ld", colour=colour)
 
 
+def draw_dropped_boxes(draw, boxes, picture_width):
+    """Draw the boxes that were thrown away: thin, grey, with the reason."""
+    for shown in boxes.dropped:
+        box = shown.box
+        draw.rectangle((box.left, box.top, box.right, box.bottom), outline=DROPPED_COLOUR, width=1)
+        if check_video_settings.SHOW_BOX_DETAILS:
+            # A car that was followed but never trusted still has a number.
+            car = f"car {shown.track_number}  " if shown.track_number else ""
+            details = f"{car}{shown.reason}  {box.confidence:.2f}"
+            # "la": the text hangs inside the box, below its top edge, so it
+            # does not cover the label of a kept box that stands on top.
+            write_text(draw, (box.left + 4, box.top + 4), details, scaled(BOX_TEXT_SIZE, picture_width),
+                       anchor="la", colour=DROPPED_COLOUR)
+
+
 def draw_picture(image, time_seconds, explanation, profile_name):
     """Return a new picture: the given one with the module's work drawn over it.
 
@@ -97,12 +114,23 @@ def draw_picture(image, time_seconds, explanation, profile_name):
     margin = scaled(MARGIN, width)
 
     boxes = boxes_at(explanation, time_seconds)
+    # The thrown-away boxes go first, so the kept ones are drawn over them.
+    if boxes and check_video_settings.SHOW_DROPPED_BOXES:
+        draw_dropped_boxes(draw, boxes, width)
     if boxes and check_video_settings.SHOW_KEPT_BOXES:
         draw_kept_boxes(draw, boxes, width)
 
     if check_video_settings.SHOW_EVENTS:
         labels = ", ".join(labels_at(explanation, time_seconds))
         write_text(draw, (margin, margin), labels, scaled(EVENT_TEXT_SIZE, width))
+
+    if check_video_settings.SHOW_DROPPED_EVENTS:
+        dropped = dropped_at(explanation, time_seconds)
+        if dropped:
+            # The second line, below the event line.
+            text = "dropped: " + ", ".join(f"{d.stretch.label} ({d.reason})" for d in dropped)
+            below = margin + scaled(EVENT_TEXT_SIZE, width) + scaled(12, width)
+            write_text(draw, (margin, below), text, scaled(DROPPED_TEXT_SIZE, width), colour=DROPPED_COLOUR)
 
     # Always shown: which profile's values the rules used, and the time.
     tenths = int(time_seconds * 10) % 10

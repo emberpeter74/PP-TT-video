@@ -42,8 +42,24 @@ SHOW_KEPT_BOXES = True
 #           the value the car rules decide on.
 SHOW_BOX_DETAILS = True
 
+# True: the boxes that were thrown away are drawn too, thin and grey, with
+# the reason:
+#   too wide            wider than a car can be: the own cockpit
+#   double              a second box around a car that has a box already
+#   never sure enough   the model was never sure enough that this is a car,
+#                       so the car rules skip it (written with its car number)
+# These are what the rules never see. If a real car is among them, that is
+# why an event was missed.
+SHOW_DROPPED_BOXES = True
+
 # --- The events -------------------------------------------------------------------
 
 # True: the labels that apply at this moment are written across the top,
 # exactly as they go into the events file.
 SHOW_EVENTS = True
+
+# True: events that were found and then thrown away are written in grey
+# under the event line, with the reason, for example
+# "dropped: sliding (outside the part at pace)". Events are only kept in the
+# part of the video that is driven at pace.
+SHOW_DROPPED_EVENTS = True
