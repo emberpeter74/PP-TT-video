@@ -14,19 +14,8 @@ from pp_tt_video.make_profile import (
     scaled_values,
 )
 from pp_tt_video.profile import load_profile
-from pp_tt_video.sensors import SensorError, SensorSecond
-
-
-def driving(seconds_of_force):
-    """Made-up sensor data: one SensorSecond per (forward force, sideways force).
-
-    Every second holds ten identical measurements. The axes follow
-    settings.py: 0 is down (gravity), 1 is sideways, 2 is forward.
-    """
-    return [
-        SensorSecond(float(number), [(-9.8, sideways, forward)] * 10, [(0.0, 0.0, 0.0)] * 10)
-        for number, (forward, sideways) in enumerate(seconds_of_force)
-    ]
+from pp_tt_video.sensors import SensorError
+from tests.helpers import driving
 
 
 def references(effort, cornering):
