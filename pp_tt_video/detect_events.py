@@ -4,7 +4,8 @@ This file connects the parts: it reads the reduced pictures, has the cars
 found and followed, lets the rules decide, and builds the timeline.
 
 Detected so far:
-    from the pictures:       overtaking, overtaken and held up;
+    from the pictures:       overtaking, overtaken and held up (cars),
+                             obstacle (knocked-over cones);
     from the motion sensors: out of session, warm up, cooling, crash,
                              sliding and offtrack.
 """
@@ -14,6 +15,7 @@ from pp_tt_video.car_events import events_of_tracks
 from pp_tt_video.detect_cars import CarDetector, keep_car_boxes
 from pp_tt_video.detections_file import Detections
 from pp_tt_video.event_types import load_event_types
+from pp_tt_video.object_events import events_of_objects
 from pp_tt_video.offtrack import detect_offtrack
 from pp_tt_video.pace import outside_pace
 from pp_tt_video.sensors import SensorError, read_sensors
@@ -119,17 +121,19 @@ def combine_stretches(event_stretches, pace_parts):
     return sorted(pace_parts + kept, key=lambda stretch: stretch.start)
 
 
-def timeline_from_detections(video_path, detections):
+def timeline_from_detections(video_path, detections, objects=None):
     """Let the rules decide, and return the timeline for the events file.
 
-    This is everything after the slow part: it takes seconds. The video is
+    This is everything after the slow parts: it takes seconds. The video is
     only opened for its length and its motion sensor data.
+    objects: the objects found in the video (find_objects.py), or None.
     """
     info = read_video_info(video_path)
     pace_parts, sensor_events = detect_from_sensors(video_path, info.duration_seconds)
     tracks, picture_height = tracks_from_detections(detections)
     car_stretches = events_of_tracks(tracks, picture_height)
-    stretches = combine_stretches(car_stretches + sensor_events, pace_parts)
+    object_stretches = events_of_objects(objects)
+    stretches = combine_stretches(car_stretches + sensor_events + object_stretches, pace_parts)
     return build_timeline(stretches, info.duration_seconds, list(load_event_types()))
 
 

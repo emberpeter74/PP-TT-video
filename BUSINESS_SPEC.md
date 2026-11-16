@@ -61,14 +61,14 @@ Decided by the user, after four of five new videos came out as one long `warm up
 - **A profile says what counts as quick for one driver in one car.** It holds the values the rules compare with. Without a profile the module uses its built-in values, which are the user's own.
 - **Choosing a profile:**
   - `--profile <name>` on the command line uses that profile for every video in the run.
-  - Otherwise, if the folder of a video holds a profile file, that profile is used for that video. **(Assumption: this also applies when single video files are given instead of a folder: the file's own folder is looked at.)**
+  - Otherwise, if the folder of a video holds a profile file, that profile is used for that video. This also applies when single video files are given instead of a folder: the file's own folder is looked at (confirmed by the user on 2026-11-16).
   - Otherwise the built-in values are used.
-  - `--profile` wins over a profile file in the folder **(assumption: a value typed on the command line is the most deliberate choice)**.
+  - `--profile` wins over a profile file in the folder (a value typed on the command line is the most deliberate choice; confirmed by the user on 2026-11-16).
 - **Making a profile:** a separate command reads the videos in a folder and writes a profile from them. This is how a new driver starts with the tool.
   - The values are **scaled relative to the user's own driving** (decided by the user, as a first idea to be changed if it does not work). The command measures how hard the driver typically brakes and corners in those videos, compares that with the user's examples, and scales the values that depend on the driver by the same ratio.
   - Only values that depend on the driver are scaled: what counts as pace, the cornering force from which slides are looked for, and the cornering force that marks the last corner before leaving the track. Values that depend on the car or the camera (how hard the car shakes on a kerb, how large another car looks) cannot be measured this way; they keep the built-in values and can be changed by hand in the file.
   - The folder must hold that driver's videos only. The command cannot tell drivers apart.
-- **The profile file is plain text** that can be read and edited by hand, with a comment on every value. It is not program code. **(Assumption: a profile may come from another driver, and a file that is program code would run as a program on this PC.)**
+- **The profile file is plain text** that can be read and edited by hand, with a comment on every value. It is not program code: a profile may come from another driver, and a file that is program code would run as a program on this PC (confirmed by the user on 2026-11-16).
 - **Which profile was used is always visible:** it is printed for every video when the tool runs, and it is shown on the check video. The events file does not change: its format is fixed for the other modules.
 - Known risk: lower values mean the rules react to smaller signals, so false alarms become more likely for a gentle driver. The check video is the tool to see whether a new profile works.
 
@@ -99,7 +99,8 @@ The footage is divided into consecutive states. Normally one label applies at a 
 - A label alone does not tell the module what to look for. **Each entry holds two things: the label and a plain-language description** of what the event looks like (agreed).
 - The module uses the description to recognise the event where that works. Types that cannot be recognised that way get a dedicated detection routine or labelled example clips. How well the description route works is unproven and must be tested on the examples.
 - Adding a type should normally mean adding one line (label and description) to the list.
-- Until a new type can be recognised, such moments still appear as `other event` (section 5).
+- Until a new type can be recognised, such moments are left as `clear` (changed on 2026-11-16, see section 5; the earlier idea was to write them as `other event`).
+- The description route was tried in step 9: a picture model that is told in words what to look for finds cones well ("a traffic cone"), but "a person" or "a car part" also found the driver and the cockpit. So for now words are used to find an object, and a rule decides what it means.
 - The module only writes labels that are in the list, plus `other event` (see section 5).
 
 ### Known event types so far
@@ -132,7 +133,7 @@ These are the description texts for each entry in the event type list. All are w
 | Label | Description |
 |---|---|
 | `out of session` | The session has not started yet or is already over: the car is in the paddock or the pit lane, drives to the track, has left the track, or is parked. From the start of the video until the car joins the track, and from leaving the track until the end of the video. (Wording proposed, to be confirmed.) |
-| `warm up` | From joining the track until the car first drives at full pace: the slow first lap. (Wording changed when `out of session` was added, to be confirmed.) |
+| `warm up` | From joining the track until the car first drives at full pace: the slow first lap. (Wording changed when `out of session` was added; confirmed by the user on 2026-11-16.) |
 | `clear` | The car drives at pace on the track. No other car is close ahead or alongside, nothing lies on the road, and the car stays on the tarmac and under control. A car further ahead that I am not catching does not change this. |
 | `offtrack` | My car leaves the tarmac with at least two wheels: grass, gravel or run-off area is under or directly ahead of the car, often with a shaking picture or dust. Ends when the car is back on the tarmac. |
 | `sliding` | My car loses grip but stays on the track: the view swings sideways more than the road bends, the steering is corrected quickly, tyres may squeal. Ends when the car drives straight and stable again. |
@@ -141,7 +142,7 @@ These are the description texts for each entry in the event type list. All are w
 | `held up` | A car ahead of me holds me up: I am close behind it, I am not falling back, and it dictates my line and speed. Ends when I start to overtake it, when it pulls away, or when it leaves the track ahead of me. |
 | `obstacle` | Something is on or beside the road that should not be there: debris, car parts, fluid, gravel thrown onto the tarmac, or a stopped car. Starts when it becomes visible; ends when I have passed it. |
 | `crash` | My car can no longer drive on at pace: it hits something, is hit by another car, or stops with a mechanical failure. Lasts until the end of the video unless the car drives on. (Draft, to be confirmed. Added from the third example, where the clutch failed.) |
-| `cooling` | From the moment the car stops driving at pace at the end of the session until it leaves the track: the slow final lap. (Wording changed when `out of session` was added, to be confirmed.) |
+| `cooling` | From the moment the car stops driving at pace at the end of the session until it leaves the track: the slow final lap. (Wording changed when `out of session` was added; confirmed by the user on 2026-11-16.) |
 | `other event` | Anything clearly unusual that fits none of the descriptions above. (Fixed label, not part of the list.) |
 
 Decided by the user:
@@ -172,16 +173,26 @@ Decided by the user:
 - **After a crash there is no `cooling` and no `out of session`** (decided by the user): `crash` lasts until the end of the video. It does not matter when the car was taken off the track.
 - **Another car standing on the track is an `obstacle`** like any other (decided by the user). Not built yet.
 
+`obstacle`, as far as it is built (step 9):
+
+- The module reports a **cone knocked over**: a cone lying on its side, in any colour. Cones mark the edge of the track, also where they stand on tarmac to close off parts not used today; a standing cone is never an obstacle. Decided by the user: cones first, because they are the most common thing on the track.
+- **Reported on every lap** on which it is seen (decided by the user): a cone that stays where it fell gives one `obstacle` per lap.
+- A lying cone on the kerb or at the grass edge is reported too, although it is not in the intended path (accepted by the user for the 09-41 example). Telling "on the track" from "beside it" is left for later.
+- Not found yet: an upright cone in the way, car parts, a person, a stopped car. Decided by the user: the recognition is built as good as it is now and improved in a later phase.
+- Result on the examples: the three obstacles marked in 12-17 are found. Known false report: a far row of standing cones taken for one lying cone (once in 10-32).
+- Searching for cones is slow: the first run of a video takes about 1.25 times its length longer. The result is kept in a file, so later runs are quick.
+- Like every event, not reported outside the part at pace.
+
 `crash`, as far as it is built:
 
 - The module reports `crash` when the car stands still less than 60 seconds after it stopped driving at pace: there was no cool-down lap, so something broke or was hit. This finds the breakdown in the 12-17 example.
-- Known risk, accepted by the user: driving straight into the pits from a fast lap and parking within a minute would also be reported as `crash`.
+- Known risk, accepted by the user: driving straight into the pits from a fast lap and parking within a minute would also be reported as `crash`. It happened once: GX010179 at 10:53 is a pit stop (confirmed by the user on 2026-11-16).
 - A collision after which the car drives on is not detected.
 
-Assumptions made while building this, to be confirmed by the user:
+Assumptions made while building this, since confirmed by the user:
 
-- **Events are only reported in the part at pace.** `overtaking`, `overtaken`, `held up`, `sliding` and `offtrack` are not reported during `out of session`, `warm up`, `cooling` and `crash`. In the pit lane and paddock, parked and passing cars would otherwise be reported as events, and the larger program ignores everything that is not `clear` anyway.
-- **A video in which the car never drives at pace is `warm up`**, after any `out of session` at its start.
+- **Events are only reported in the part at pace** (confirmed by the user on 2026-11-16). `overtaking`, `overtaken`, `held up`, `sliding` and `offtrack` are not reported during `out of session`, `warm up`, `cooling` and `crash`. In the pit lane and paddock, parked and passing cars would otherwise be reported as events, and the larger program ignores everything that is not `clear` anyway.
+- **A video in which the car never drives at pace is `warm up`** (confirmed by the user on 2026-11-16), after any `out of session` at its start.
 
 `sliding` and `offtrack` (built in step 7, from the camera's motion sensors):
 
@@ -198,12 +209,12 @@ Observations from the example:
 
 ## 5. Unknown events
 
-The user expects event types they cannot name yet. Requirements:
+The user expects event types they cannot name yet. Decided by the user (2026-11-16): this means **a clear place in the module where new kinds of event are added later**, not a detector that flags anything unusual (which would also conflict with the rule that a false alarm is worse than a missed event).
 
-- The module flags segments that look unusual compared with normal clear driving, even if no known label matches.
-- Such a segment is written to the txt file with the label `other event`.
-- The user can review these segments and give them a name.
-- A newly named event type is added to the event type list (section 4) and can then be detected in later footage without rewriting the module.
+- A new kind of event is: its line in the event type list (section 4), the words that tell the picture model what to look for if it is something new on the road, and one rule. Nothing else in the module changes.
+- `other event` stays a fixed label. No rule writes it yet.
+
+Earlier wording, replaced: "The module flags segments that look unusual compared with normal clear driving, even if no known label matches. Such a segment is written with the label `other event`; the user reviews it and gives it a name."
 
 ## 6. Output
 
@@ -306,11 +317,11 @@ Decided by the user: the motion sensor data is written to its own file, separate
 
 ## 10. Open questions
 
-1. Is the `crash` description right, or should a mechanical failure be its own event type?
-2. Are the two assumptions in section 4 right (events only in the part at pace; a video never at pace is `warm up`)?
-3. Are the changed descriptions of `out of session`, `warm up` and `cooling` in section 4 right?
-4. In the 09-41 example the module reports a slide at 02:47 that the hand-made file does not have. Is it a real slide?
-5. In the 12-17 example the hand-made file has `sliding` from 02:49 to 03:11. Did the slide last that long, or is a `clear` line missing?
-6. The assumptions on driver and car profiles in section 3: the video's own folder is looked at also for single files; `--profile` wins over a file in the folder; a profile is plain text, not program code.
+1. Is the `crash` description right, or should a mechanical failure be its own event type? **It stays `crash` (2026-11-16):** the description is right as it is.
+2. Are the two assumptions in section 4 right? Events only in the part at pace: **confirmed (2026-11-16).** A video never at pace is `warm up`: **confirmed (2026-11-16).**
+3. Are the changed descriptions of `out of session`, `warm up` and `cooling` in section 4 right? **Confirmed (2026-11-16).**
+4. In the 09-41 example the module reports a slide at 02:47 that the hand-made file does not have. Is it a real slide? **Yes, a real slide (2026-11-16).** The hand-made file is not changed; the comparison counts it as extra.
+5. In the 12-17 example the hand-made file has `sliding` from 02:49 to 03:11. Did the slide last that long, or is a `clear` line missing? **A `clear` line is missing (2026-11-16).** The slide ended at 02:50 (given by the user). The line `02:50 clear` was added to the cleaned copy; the original is unchanged.
+6. The assumptions on driver and car profiles in section 3: the video's own folder is looked at also for single files; `--profile` wins over a file in the folder; a profile is plain text, not program code. **All three confirmed (2026-11-16).**
 
 Settled: the two further examples promised by the user have been provided (see section 3). The 10-32 and 12-17 recordings start in the pit exit and go straight to pace: `out of session` for a few seconds, then `clear`, no `warm up` (confirmed by the user).

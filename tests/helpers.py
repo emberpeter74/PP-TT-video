@@ -32,6 +32,30 @@ def car_box(centre_x, height, confidence=0.95, centre_y=360):
     return CarBox(centre_x - height, centre_y - height / 2, centre_x + height, centre_y + height / 2, confidence)
 
 
+def cone_box(centre_x, width, height, confidence=0.5, centre_y=380, kind="cone"):
+    """A box around an object the object model found, in a 1280 wide picture."""
+    from pp_tt_video.objects_file import ObjectBox
+    return ObjectBox(kind, centre_x - width / 2, centre_y - height / 2, centre_x + width / 2, centre_y + height / 2,
+                     confidence)
+
+
+def objects_of(pictures, picture_height=720):
+    """Objects as a search of a 1280 pixel wide video would give them.
+
+    pictures: a list of (time in seconds, [ObjectBox, ...]).
+    """
+    from pp_tt_video.objects_file import Objects
+    return Objects(
+        analysis_width=1280,
+        picture_height=picture_height,
+        frames_per_second=settings.OBJECT_FRAMES_PER_SECOND,
+        min_confidence=settings.OBJECT_MIN_CONFIDENCE,
+        model=settings.OBJECT_MODEL,
+        words=dict(settings.OBJECT_WORDS),
+        pictures=pictures,
+    )
+
+
 def detections_of(pictures, picture_height=720):
     """Detections as a pass over a 1280 pixel wide video would give them.
 

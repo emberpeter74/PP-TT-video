@@ -8,9 +8,11 @@ from unittest import mock
 from pp_tt_video import check_video_settings, settings
 from pp_tt_video.detect_cars import CarBox
 from pp_tt_video.detections_file import Detections, load_detections
+from pp_tt_video.objects_file import load_objects
 from pp_tt_video.pipeline import find_videos, make_sensor_file, process_videos
 from pp_tt_video.sensors import SensorError, SensorSecond
 from pp_tt_video.video import VideoInfo
+from tests.helpers import cone_box, objects_of
 
 
 def small_detections():
@@ -23,6 +25,24 @@ def small_detections():
         min_confidence=settings.MIN_DETECTION_CONFIDENCE,
         pictures=pictures,
     )
+
+
+def small_objects(lying_cone_at=None):
+    """What a search for objects over a very short video could return.
+
+    15 pictures, each with a standing cone; with lying_cone_at, the picture
+    at that time also has a cone lying on its side.
+    """
+    pictures = []
+    for number in range(15):
+        time = round(number * 0.2, 3)
+        boxes = [cone_box(300, 15, 30, 0.6)]
+        if time == lying_cone_at:
+            boxes.append(cone_box(700, 30, 15, 0.4))
+        pictures.append((time, boxes))
+    objects = objects_of(pictures)
+    objects.analysis_width = settings.ANALYSIS_WIDTH
+    return objects
 
 
 class FindVideosTest(unittest.TestCase):
@@ -140,15 +160,17 @@ class ProfileInPipelineTest(unittest.TestCase):
         self.folder = Path(temporary.name)
         self.seen = []   # the PACE_MIN_EFFORT the rules saw, per video
 
-        def fake_timeline_from_detections(video, detections):
+        def fake_timeline_from_detections(video, detections, objects=None):
             self.seen.append(settings.PACE_MIN_EFFORT)
             return []
 
-        # The model is not loaded, the slow pass over the pictures and the
-        # rules are fakes, and no events file is written (the fake gives no
-        # real timeline).
+        # The models are not loaded, the slow passes over the pictures and
+        # the rules are fakes, and no events file is written (the fake gives
+        # no real timeline).
         for target, replacement in [
             ("pp_tt_video.detect_cars.CarDetector", mock.MagicMock()),
+            ("pp_tt_video.find_objects.ObjectDetector", mock.MagicMock()),
+            ("pp_tt_video.find_objects.find_objects", lambda video, detector, on_progress=None: small_objects()),
             ("pp_tt_video.detect_events.detect_boxes", lambda video, detector, on_progress=None: small_detections()),
             ("pp_tt_video.detect_events.timeline_from_detections", fake_timeline_from_detections),
             ("pp_tt_video.pipeline.write_events_file", mock.MagicMock()),
@@ -243,6 +265,8 @@ class DetectionsInPipelineTest(unittest.TestCase):
         info = VideoInfo(width=5312, height=2988, frames_per_second=29.97, duration_seconds=3.0, codec="hevc")
         for target, replacement in [
             ("pp_tt_video.detect_cars.CarDetector", mock.MagicMock()),
+            ("pp_tt_video.find_objects.ObjectDetector", mock.MagicMock()),
+            ("pp_tt_video.find_objects.find_objects", lambda video, detector, on_progress=None: small_objects()),
             ("pp_tt_video.detect_events.detect_boxes", fake_detect_boxes),
             ("pp_tt_video.detect_events.read_video_info", lambda video: info),
             ("pp_tt_video.detect_events.read_sensors", lambda video: []),
@@ -406,6 +430,130 @@ class DetectionsInPipelineTest(unittest.TestCase):
         (check / "x-events.txt").unlink()
         self.run_module("check", check_video=True)
         self.assertEqual((plain / "x-events.txt").read_bytes(), (check / "x-events.txt").read_bytes())
+
+
+class ObjectsInPipelineTest(unittest.TestCase):
+    """The search for objects is saved in a file on every run and reused.
+
+    The slow search is a fake that counts how often it is called; the car
+    pass is a fake too. The rules are the real ones, with a made-up video
+    length and no sensor data (so the whole video counts as at pace).
+    """
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.folder = Path(temporary.name)
+        self.video = self.folder / "x.mp4"
+        self.video.write_bytes(b"")
+        self.searches = 0
+        self.lying_cone_at = 1.0
+        self.searching = []   # the progress the search reported
+
+        def fake_find_objects(video, detector, on_progress=None):
+            self.searches += 1
+            detector.detect([])   # as the real search does: this loads the model
+            if on_progress:
+                on_progress(1.0)
+            return small_objects(self.lying_cone_at)
+
+        info = VideoInfo(width=5312, height=2988, frames_per_second=29.97, duration_seconds=3.0, codec="hevc")
+        for target, replacement in [
+            ("pp_tt_video.detect_cars.CarDetector", mock.MagicMock()),
+            ("pp_tt_video.find_objects.ObjectDetector", mock.MagicMock()),
+            ("pp_tt_video.find_objects.find_objects", fake_find_objects),
+            ("pp_tt_video.detect_events.detect_boxes", lambda video, detector, on_progress=None: small_detections()),
+            ("pp_tt_video.detect_events.read_video_info", lambda video: info),
+            ("pp_tt_video.detect_events.read_sensors", lambda video: []),
+        ]:
+            patcher = mock.patch(target, replacement)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def run_module(self, output_name="out", **options):
+        output = self.folder / output_name
+        output.mkdir(exist_ok=True)
+        results = process_videos([self.video], output_folder=output,
+                                 on_searching=lambda number, total, part: self.searching.append(part), **options)
+        return output, results
+
+    def test_objects_are_saved_on_every_run(self):
+        output, _ = self.run_module()
+        self.assertEqual(load_objects(output / "x-objects.json"), small_objects(1.0))
+        self.assertEqual(self.searches, 1)
+
+    def test_lying_cone_gives_an_obstacle_in_the_events_file(self):
+        output, results = self.run_module()
+        self.assertIn("events written", results[0].message)   # the GPS step fails on the empty video file
+        self.assertIn("obstacle", (output / "x-events.txt").read_text(encoding="utf-8"))
+
+    def test_no_lying_cone_gives_no_obstacle(self):
+        self.lying_cone_at = None
+        output, _ = self.run_module()
+        self.assertNotIn("obstacle", (output / "x-events.txt").read_text(encoding="utf-8"))
+
+    def test_saved_objects_are_reused(self):
+        output, _ = self.run_module()
+        (output / "x-events.txt").unlink()   # so the events are made again
+        self.run_module()
+        self.assertTrue((output / "x-events.txt").is_file())
+        self.assertEqual(self.searches, 1)
+
+    def test_objects_from_other_settings_are_not_reused(self):
+        output, _ = self.run_module()
+        (output / "x-events.txt").unlink()
+        with mock.patch.object(settings, "OBJECT_MIN_CONFIDENCE", 0.2):
+            self.run_module()
+        self.assertEqual(self.searches, 2)
+
+    def test_damaged_objects_file_is_replaced(self):
+        output, _ = self.run_module()
+        (output / "x-events.txt").unlink()
+        (output / "x-objects.json").write_text('{"pictures": [', encoding="utf-8")
+        _, results = self.run_module()
+        self.assertIn("events written", results[0].message)   # the GPS step fails on the empty video file
+        self.assertEqual(self.searches, 2)
+        self.assertEqual(load_objects(output / "x-objects.json"), small_objects(1.0))
+
+    def test_overwrite_searches_again_but_only_once(self):
+        self.run_module(check_video=False)
+        with mock.patch("pp_tt_video.check_video.write_check_video",
+                        lambda video, path, *rest, **options: Path(path).write_bytes(b"")), \
+                mock.patch("pp_tt_video.pipeline.read_sensors", lambda video: []), \
+                mock.patch("pp_tt_video.pipeline.read_video_info",
+                           lambda video: VideoInfo(5312, 2988, 29.97, 3.0, "hevc")):
+            self.run_module(overwrite=True, check_video=True)
+        self.assertEqual(self.searches, 2)
+
+    def test_existing_events_file_means_no_search(self):
+        output, _ = self.run_module()
+        self.run_module()   # the events file exists: skipped
+        self.assertEqual(self.searches, 1)
+
+    def test_gps_only_makes_no_objects_file(self):
+        output, _ = self.run_module(with_events=False)
+        self.assertFalse((output / "x-objects.json").exists())
+        self.assertEqual(self.searches, 0)
+
+    def test_search_progress_is_reported(self):
+        self.run_module()
+        self.assertEqual(self.searching, [1.0])
+
+    def test_missing_library_fails_that_video_and_run_goes_on(self):
+        second = self.folder / "y.mp4"
+        second.write_bytes(b"")
+
+        def no_library(*arguments, **options):
+            raise ImportError("No module named 'transformers'")
+
+        output = self.folder / "out"
+        output.mkdir()
+        with mock.patch("pp_tt_video.find_objects.ObjectDetector", no_library):
+            results = process_videos([self.video, second], output_folder=output)
+        self.assertEqual(len(results), 2)
+        for result in results:
+            self.assertFalse(result.ok)
+            self.assertIn("detection libraries are not installed", result.message)
 
 
 if __name__ == "__main__":

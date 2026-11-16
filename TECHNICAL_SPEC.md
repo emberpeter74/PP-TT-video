@@ -252,9 +252,11 @@ Notes on these numbers:
   | 02:54 | overtaking | `overtaking`: correct |
   | 03:35 to 03:40 | sliding and overtaking | `held up` from 03:35, `overtaking` from 03:38: the overtake is correct; the `held up` before it is a judgement call |
   | 04:05 | overtaking | Nothing: **missed**. The car is seen large in only one picture, and the rule that guards against one-picture glitches drops it. An earlier version of the rules, without that guard, found it. |
-  | 10:34 to 10:38 | overtaking | `held up`: **wrong label**. The car is close for 4 seconds, but the pass itself is not recognised. |
+  | 10:34 to 10:38 | a car drives next to the track (corrected by the user on 2026-11-16; earlier noted as an overtake) | `held up`: **false alarm**. The car looks close for 4 seconds. |
 
   So of 11 real overtakes in the three examples (`overtaking` and `overtaken`), 9 are found, 1 is missed and 1 is reported as `held up`. The two failures are the next things to improve in the car rules. The hand-made events file for 09-41 does not contain these four overtakes yet; until it does, the comparison tool counts them as false alarms.
+
+  **Update 2026-11-16:** the user gave the end times of the first three (02:55, 03:40, 04:06); they are in the cleaned copy now (the overtake at 03:38 overlaps the slide from 03:37 to 03:39). The fourth, 10:34 to 10:38, is **not an overtake** (corrected by the user): a car drives next to the track. The hand-made file rightly has `clear` there, and the module's `held up` is a false alarm. Recounted: of 10 real overtakes in the three examples, 9 are found and 1 is missed (04:05); the car rules also give a false `held up` for a car driving beside the track.
 - **The missed `held up` in 10-32** is a car that the user marked as holding them up while it was still small in the picture (0.045 to 0.055 of the picture's height). At that size the 12-17 example has a car ahead that the user marked as `clear`. Size alone cannot tell these two apart, so the rule stays on the cautious side.
 - **The extra `held up` in 10-32** is the car that has just overtaken: it stays close ahead for five seconds before pulling away.
 - Three videos are too few to call this accurate. The numbers show the method works in principle.
@@ -342,7 +344,7 @@ Notes:
 - **All 10 marked slides are found**, each within 2 seconds of the marked start.
 - **The extra slide at 02:47 in 09-41** shows the same catch as the others, only shorter. Whether it is a real slide the hand-made file leaves out is for the user to check in the video.
 - **The offtrack at 02:31 in 09-41** was missed by the step 7 rule: without smoothing it shakes the car at 5 to 7 m/s² for about a second, which is what a kerb does. The reworked rule finds it (02:30.5 to 02:33.9; marked by hand 02:31 to 02:33).
-- **In 12-17 the hand-made file has `sliding` from 02:49 to 03:11**, 22 seconds, directly followed by `held up`. The module reports the slide from 02:48 to 02:51 and `clear` after it. The comparison tool counts this as found.
+- **In 12-17 the hand-made file has `sliding` from 02:49 to 03:11**, 22 seconds, directly followed by `held up`. The module reports the slide from 02:48 to 02:51 and `clear` after it. The comparison tool counts this as found. **Settled on 2026-11-16:** a `clear` line was missing; the slide ended at 02:50, and `02:50 clear` was added to the cleaned copy of the hand-made file.
 - With the step 7 rule the paddock and the pit lane were reported too (three places in 09-41, one in 10-32) and dropped as `warm up` or `cooling`. The reworked rule does not report them in the first place.
 
 Limits:
@@ -408,8 +410,8 @@ Limits:
 | `warm up`, `cooling` | **Built in step 8** (see above): how hard the car brakes and accelerates, from the accelerometer. Not from speed. | Good on the examples |
 | `out of session` | **Built** (see above): slow at the start of the video until the car has accelerated onto the track; after the last real corner before the car parks. | Medium: fits the three examples, values are track-dependent |
 | `crash` | **First rule built** (see above): the car stands still within a minute after driving at pace. Collisions after which the car drives on are open. | Medium: one example |
-| `obstacle` | Hardest. Objects on the road that are not moving cars: object detection for stopped cars, description-based recognition for debris. | Low; debris is small and rare |
-| `other event` | Compare each moment with normal clear driving in the same video and flag only strong deviations. | Low; conflicts with the false-alarm rule, so it starts very conservative |
+| `obstacle` | **Built in step 9** (see "Step 9: obstacle"): a model that takes words finds cones; a cone whose box is clearly wider than tall lies on its side. Upright cones, car parts, people and stopped cars are not found yet. | Good for knocked-over cones on the examples; one known false report |
+| `other event` | **Not a detector** (decided by the user): a place to add later kinds, see `pp_tt_video/object_events.py`. No rule writes the label yet. | — |
 
 ### The description route
 
@@ -418,6 +420,7 @@ The business specification gives each event type a description. Technically this
 - Models of this kind that fit in 8 GB exist and are fast, but judge single pictures, not motion. They suit `obstacle`; they do not suit `sliding`.
 - Larger models that follow motion do not fit this graphics card.
 - Proposal: build the detectors above first, and test the description route on the examples as an experiment before relying on it.
+- **Tried in step 9:** OWLv2 (a model that takes words and returns boxes) finds cones of any colour from about 8 pixels wide. "A person" and "a car part on the road" also found the driver in the mirror and things in the cockpit, so they are not used. The words find the object; a rule decides what it means.
 
 ## 7. Building the timeline (step 5)
 
@@ -526,7 +529,11 @@ The son's profile sets `PACE_MIN_EFFORT = 0.5`, `PACE_HARD_FORCE = 1.16`, `SLIDE
 | GX010182 | all `warm up` | at pace for the whole video |
 | GX010183 | all `warm up` | at pace for the whole video |
 
-Not yet judged: whether the whole of 182 and 183 really is at pace, and whether the `crash` in 179 is a stop in the pits. The full detection (with the car rules) was **not** run on these videos, because of the finding below.
+**GX010179, judged by the user (2026-11-16): the `crash` from 10:53 is a stop in the pits**, not a crash. This is the known risk of the crash rule that the user accepted (driving into the pits from a fast lap and parking within a minute). It should be `cooling` and then `out of session`. Not fixed.
+
+**GX010182, judged by the user (2026-11-16): not all at pace.** `out of session` until 02:51, `warm up` from 02:51, faster driving from 03:53. Whether the pace lasts until the end of the video was not said (assumption: it does). The module with the profile calls the whole video at pace: it misses the first 3:53. Not fixed; a test case together with GX010183.
+
+**GX010183, judged by the user (2026-11-16): not at pace.** Before 04:19 the car is not on track (`out of session`); `warm up` starts at 04:19; after that the driver practised the lines, perhaps never at full pace. So the profile's "at pace for the whole video" is wrong; the built-in values ("all `warm up`") came closer. The pace threshold of the profile (0.5) is low enough that practising lines counts as pace. The user: this footage may be ignored completely. Not fixed; noted as a test case for a later look at the pace rule on a beginner's driving. The full detection (with the car rules) was **not** run on these videos, because of the finding below.
 
 **Found in step P2: the offtrack rule gives false alarms on the son's footage.** With the part at pace found, the `offtrack` stretches inside it are kept: 6, 13, 12 and 19 in the four videos. The user watched the whole of GX010183: all 19 are false, the car never left the track (once or twice it was on a kerb).
 
@@ -593,7 +600,7 @@ Both offtracks in 09-41 lie in the part at pace and are kept (`cooling` starts a
 
 **Profiles.** `OFFTRACK_MIN_SHAKE` stays a value a profile may set. A profile written before the rework shows the old built-in value 7.0 in a comment line (it is not in force, the line is commented out). A profile that sets the value by hand to something on the old scale would now find nothing: such a profile must be made again.
 
-### Step 9: obstacle (count done, not built yet)
+### Step 9: obstacle (built in O1 and O2; the check video follows in O3)
 
 Design and plan: `docs/superpowers/specs/2026-11-16-obstacle-design.md` and `docs/superpowers/plans/2026-11-16-obstacle.md`.
 
@@ -604,7 +611,7 @@ Design and plan: `docs/superpowers/specs/2026-11-16-obstacle-design.md` and `doc
 | Video | Reports | Real lying cones | False | Note |
 |---|---|---|---|---|
 | 12-17 | 9 | 9 | 0 | the three obstacles of the hand-made file (02:09, 02:27, 02:42) and the same cones on later laps |
-| 09-41 | 6 | 6 | 0 | none is in the hand-made file; five are probably one cone at the grass edge, lap after lap |
+| 09-41 | 6 | 6 | 0 | none was in the hand-made file; five are probably one cone at the grass edge, lap after lap. The user wants them reported (2026-11-16): six `obstacle` lines were added to the cleaned copy |
 | 10-32 | 1 | 0 | 1 | 05:13: a far row of dark cones boxed as one wide object |
 
 "Real" is the assistant's reading of cut-outs. The five videos in `input video files/` were not counted (the user's decision, see below).
@@ -620,6 +627,21 @@ What the count showed:
 **Decided by the user (2026-11-16):** the cone recognition is built as good as it is now. Making it better (the false report on a far row, upright cones in the way, other objects, whether the cone is in the intended path, speed) belongs to a later phase.
 
 **Values fixed by the count:** `OBJECT_FRAMES_PER_SECOND = 5`; all others as in the design.
+
+**As built.**
+
+| File | Job |
+|---|---|
+| `pp_tt_video/find_objects.py` | `ObjectDetector` (loads OWLv2 once; `transformers` is imported inside it), `find_objects` (one pass over the video at `OBJECT_FRAMES_PER_SECOND`), `objects_file_for` (reuse a fitting file or search and save), and the command `python -m pp_tt_video.find_objects`. |
+| `pp_tt_video/objects_file.py` | `name-objects.json`: every box with its kind and score, and the settings it was made with. A file made with another model, words, picture size, rate or lowest score is not reused. Separate from `name-detections.json`, which is unchanged. |
+| `pp_tt_video/object_events.py` | `is_lying_cone`, `lying_cones` (sightings up to `OBSTACLE_MERGE_SECONDS` apart are one event, ending `OBSTACLE_TAIL_SECONDS` after the last), `OBJECT_RULES` and `events_of_objects`. The top of the file says how a new kind of event is added. |
+
+- The objects file is written on **every** run, not only with `--check-video`, because the search is the slowest part. The model is loaded only when pictures are really searched.
+- `detect_events.timeline_from_detections` adds the object events to the others before `combine_stretches`, so obstacles outside the part at pace are dropped.
+- The run prints the progress of the two searches separately ("looking for cars", "looking for cones").
+- A box that holds the centre of another cone box counts as a row of cones only when that inner box is less than half as wide; a second box around the same cone does not hide it.
+
+**Result of the module on 12-17** (cones from the O1 file, built-in values), against the cleaned hand-made file: all 11 marked events found, none missed; 6 extra `obstacle` lines, all known (the 02:27 cone on later laps at 03:38, 04:14, 04:48; the kerb group at 02:50, 03:27, 04:03). 09-41 and 10-32 were not run with the module; their count is the one of O0 above.
 
 ## 9. Event type list
 

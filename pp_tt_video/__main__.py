@@ -13,8 +13,8 @@ import sys
 from pp_tt_video.pipeline import process_videos
 
 # Remembers the last percentage shown, so each step is printed only once:
-# one for the detection, one for drawing the check video.
-last_shown = {"percent": -1, "drawing": -1}
+# one for the cars, one for the cones, one for drawing the check video.
+last_shown = {"percent": -1, "searching": -1, "drawing": -1}
 
 
 def show_start(number, total, video):
@@ -22,15 +22,24 @@ def show_start(number, total, video):
     # flush=True shows the line at once instead of waiting for more output.
     print(f"[{number}/{total}] {video.name}: working ...", flush=True)
     last_shown["percent"] = -1
+    last_shown["searching"] = -1
     last_shown["drawing"] = -1
 
 
 def show_progress(number, total, part):
-    """Show how far the detection has got, in steps of 10 percent."""
+    """Show how far the search for cars has got, in steps of 10 percent."""
     percent = int(part * 10) * 10
     if percent > last_shown["percent"]:
         last_shown["percent"] = percent
-        print(f"[{number}/{total}]   detecting events: {percent}%", flush=True)
+        print(f"[{number}/{total}]   looking for cars: {percent}%", flush=True)
+
+
+def show_searching(number, total, part):
+    """Show how far the search for cones has got, in steps of 10 percent."""
+    percent = int(part * 10) * 10
+    if percent > last_shown["searching"]:
+        last_shown["searching"] = percent
+        print(f"[{number}/{total}]   looking for cones: {percent}%", flush=True)
 
 
 def show_drawing(number, total, part):
@@ -79,6 +88,7 @@ def main():
         check_video=arguments.check_video,
         on_start=show_start,
         on_progress=show_progress,
+        on_searching=show_searching,
         on_drawing=show_drawing,
         on_done=show_done,
     )

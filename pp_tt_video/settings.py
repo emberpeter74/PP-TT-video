@@ -121,6 +121,35 @@ OBJECT_MIN_CONFIDENCE = 0.15
 # faster than 1 and needs 1.3 GB on the graphics card.
 OBJECT_BATCH_SIZE = 4
 
+# --- Obstacle: a knocked-over cone --------------------------------------------
+
+# The label in the events file.
+OBSTACLE_LABEL = "obstacle"
+
+# A standing cone is taller than wide; a cone lying on its side is wider than
+# tall. A cone counts as lying when its box is at least this many times as
+# wide as tall. Measured on the examples: 1.2 also let through standing cones
+# half hidden behind a hand or the wiper; 1.5 kept every lying cone.
+OBSTACLE_MIN_WIDTH_RATIO = 1.5
+
+# How sure the model must be that it is a cone. Measured: the lying cones of
+# the examples scored only 0.30 to 0.46, so this cannot be raised without
+# losing real ones (0.35 lost four of the six in 09-41).
+OBSTACLE_MIN_CONFIDENCE = 0.30
+
+# The box must be at least this wide, as a part of the picture's width
+# (10 pixels in a 1280 wide picture). Smaller finds are too far away to judge.
+OBSTACLE_MIN_WIDTH_FRACTION = 10 / 1280
+
+# Sightings at most this many seconds apart are one obstacle. A lap takes
+# more than half a minute, so the same cone a lap later is a new event: an
+# obstacle that stays is reported on every lap (decided by the user).
+OBSTACLE_MERGE_SECONDS = 3
+
+# The event ends this many seconds after the last sighting: the cone was
+# seen, and then the car passed it.
+OBSTACLE_TAIL_SECONDS = 2
+
 # --- Motion sensors -----------------------------------------------------------
 
 # Tells ExifTool which sensor values to print, and how (used by sensors.py).

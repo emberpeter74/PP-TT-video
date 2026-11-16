@@ -15,6 +15,7 @@ the video's folder. Otherwise the built-in values of settings.py are used.
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 from pp_tt_video import settings
 from pp_tt_video.detections_file import (
@@ -98,9 +99,44 @@ class EventsMaker:
 
     def __init__(self):
         self.detector = None
-        # The detections of the video worked on last, as (video, detections),
-        # so the steps of one video share one pass over its pictures.
+        self.object_detector = None
+        # The detections and objects of the video worked on last, as
+        # (video, detections) and (video, objects), so the steps of one video
+        # share one pass over its pictures.
         self.last_detections = None
+        self.last_objects = None
+
+    def objects_for(self, video, output_folder, overwrite, on_progress=None):
+        """Return the objects found in a video (cones, so far): the slowest part of the work.
+
+        Unlike the car detections, the objects are always kept in a file
+        (name-objects.json), because the search takes longer than the video
+        itself. A file from an earlier run is used again, unless overwrite is
+        set or the file does not fit (half-written, or made with other
+        settings).
+        May raise ImportError or VideoError.
+        """
+        # Imported here, like the car detection: the GPS part must also work
+        # on a PC where the detection libraries are not installed.
+        from pp_tt_video import find_objects
+
+        video = Path(video)
+        if self.last_objects and self.last_objects[0] == video:
+            return self.last_objects[1]
+
+        def detect(frames):
+            # The model is loaded only when pictures really are searched:
+            # when a saved file is used, it is not needed at all.
+            if self.object_detector is None:
+                self.object_detector = find_objects.ObjectDetector()   # takes a few seconds
+            return self.object_detector.detect(frames)
+
+        # SimpleNamespace makes a small object with one attribute, "detect":
+        # all that the search asks of a detector.
+        objects, _ = find_objects.objects_file_for(video, SimpleNamespace(detect=detect), output_folder,
+                                                   overwrite, on_progress)
+        self.last_objects = (video, objects)
+        return objects
 
     def detections_for(self, video, output_folder, overwrite, on_progress=None, keep_file=False):
         """Return the car detections of a video: the slow part of the work.
@@ -139,10 +175,12 @@ class EventsMaker:
         return detections
 
     def make_events_file(self, video, output_folder, overwrite, on_progress=None, profile=BUILT_IN,
-                         keep_detections=False):
+                         keep_detections=False, on_searching=None):
         """Detect the events and write the events file. Returns (ok, message).
 
         The rules run with the profile's values in force.
+        on_progress(part) follows the search for cars, on_searching(part)
+        the search for objects.
         """
         events_path = events_path_for(video, output_folder)
         # Check first: detection takes minutes, and an existing file (perhaps
@@ -155,10 +193,11 @@ class EventsMaker:
             from pp_tt_video import detect_events
 
             detections = self.detections_for(video, output_folder, overwrite, on_progress, keep_detections)
+            objects = self.objects_for(video, output_folder, overwrite, on_searching)
             # Inside this block the rules see the profile's values; after
             # it, the built-in values are back for the next video.
             with using_profile(profile):
-                timeline = detect_events.timeline_from_detections(video, detections)
+                timeline = detect_events.timeline_from_detections(video, detections, objects)
             write_events_file(events_path, timeline, known_labels(), overwrite=overwrite)
             return True, f"events written to {events_path.name}"
         except ImportError as error:
@@ -226,12 +265,13 @@ class EventsMaker:
 
 def process_video(video, overwrite=False, output_folder=None, events_maker=None,
                   with_events=True, on_progress=None, profile_option=None, check_video=False,
-                  on_drawing=None):
+                  on_drawing=None, on_searching=None):
     """Process one video and return a FileResult. Never raises an error.
 
     profile_option: what was given with --profile, or None.
     check_video:    True with --check-video: also write the check video.
     on_drawing:     like on_progress, for the drawing of the check video.
+    on_searching:   like on_progress, for the search for objects.
     """
     started = time.monotonic()
     ok, message = make_gps_file(video, output_folder, overwrite)
@@ -249,7 +289,8 @@ def process_video(video, overwrite=False, output_folder=None, events_maker=None,
         message = f"{message}; profile: {profile.description}"
         events_maker = events_maker or EventsMaker()
         events_ok, events_message = events_maker.make_events_file(
-            video, output_folder, overwrite, on_progress, profile, keep_detections=check_video)
+            video, output_folder, overwrite, on_progress, profile, keep_detections=check_video,
+            on_searching=on_searching)
         ok = ok and events_ok
         message = f"{message}; {events_message}"
         if check_video:
@@ -262,7 +303,7 @@ def process_video(video, overwrite=False, output_folder=None, events_maker=None,
 
 def process_videos(inputs, overwrite=False, output_folder=None, with_events=True,
                    on_start=None, on_progress=None, on_done=None, profile_option=None,
-                   check_video=False, on_drawing=None):
+                   check_video=False, on_drawing=None, on_searching=None):
     """Process every video and return one FileResult per video.
 
     Each video is handled on its own: a failure is recorded and the run
@@ -277,9 +318,14 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
                    work drawn over it. The car detections are then kept in a
                    file (-detections.json) and used again by later runs.
 
-    To follow the progress, the caller can pass three functions:
+    The events need two slow passes over the pictures: one for the cars and
+    one for objects on the road (cones). The objects are always kept in a
+    file (-objects.json) and used again by later runs.
+
+    To follow the progress, the caller can pass these functions:
       on_start(number, total, video)     before a video is processed,
-      on_progress(number, total, part)   during detection; part runs from 0 to 1,
+      on_progress(number, total, part)   during the search for cars; part runs from 0 to 1,
+      on_searching(number, total, part)  during the search for objects,
       on_drawing(number, total, part)    while the check video is drawn,
       on_done(number, total, result)     as soon as a video is finished.
     """
@@ -300,8 +346,12 @@ def process_videos(inputs, overwrite=False, output_folder=None, with_events=True
             if on_drawing:
                 on_drawing(number, total, part)
 
+        def report_searching(part, number=number):
+            if on_searching:
+                on_searching(number, total, part)
+
         result = process_video(video, overwrite, output_folder, events_maker, with_events, report,
-                               profile_option, check_video, report_drawing)
+                               profile_option, check_video, report_drawing, report_searching)
         results.append(result)
         if on_done:
             on_done(number, total, result)
