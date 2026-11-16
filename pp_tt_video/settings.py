@@ -89,6 +89,38 @@ OVERTAKEN_LEAD_SECONDS = 3
 PASS_START_PART_OF_PEAK = 0.55
 PASS_END_PART_OF_PEAK = 0.5
 
+# --- Finding objects on the road ------------------------------------------------
+
+# A second ready-made model looks for things that are not cars. It takes
+# words: it is told in plain English what to look for. The name below says
+# which model; its files are downloaded once, on first use.
+OBJECT_MODEL = "google/owlv2-base-patch16-ensemble"
+
+# What to look for. Left: the short name the rest of the code uses for this
+# kind of object. Right: the words given to the model. A new kind of object
+# is a new line here (see object_events.py for what is made of the finds).
+# Measured: "a traffic cone" finds cones from about 8 pixels wide, in orange,
+# white and black. "a person" and "a car part" also found the driver and the
+# cockpit, so they are not here.
+OBJECT_WORDS = {"cone": "a traffic cone"}
+
+# How many pictures per second are searched. Measured on the examples: half
+# of the knocked-over cones are seen in one picture only at 5 per second, and
+# at 2.5 per second a third or more would be missed. Each picture takes about
+# a quarter of a second, so at 5 the search takes about 1.25 times the
+# video's length.
+OBJECT_FRAMES_PER_SECOND = 5
+
+# Finds the model is less sure of than this are not saved. This is kept low
+# on purpose: the rules have their own, higher values, and those can then be
+# changed without searching the video again. Measured: a near cone scores
+# 0.5 to 0.7, a far one 0.2 to 0.3.
+OBJECT_MIN_CONFIDENCE = 0.15
+
+# How many pictures are handed to this model at once. Measured: 4 is barely
+# faster than 1 and needs 1.3 GB on the graphics card.
+OBJECT_BATCH_SIZE = 4
+
 # --- Motion sensors -----------------------------------------------------------
 
 # Tells ExifTool which sensor values to print, and how (used by sensors.py).

@@ -7,6 +7,11 @@
 # that can use an Nvidia graphics card ("cu134" = CUDA 13.4). A plain
 # "pip install torch" on Windows gives a build without graphics card support.
 --index-url https://download.pytorch.org/whl/cu134
+# Everything else comes from the normal Python package server.
+--extra-index-url https://pypi.org/simple
 
 torch==2.15.0
 torchvision==0.29.2
+
+# The model that finds objects by words (cones, step 9) comes from this library.
+transformers==5.23.0
