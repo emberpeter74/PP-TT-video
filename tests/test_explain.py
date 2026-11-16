@@ -6,10 +6,11 @@ from unittest import mock
 from pp_tt_video import settings
 from pp_tt_video.detect_cars import CarBox
 from pp_tt_video.detect_events import timeline_from_detections
-from pp_tt_video.explain import boxes_at, dropped_at, explain, labels_at
+from pp_tt_video.explain import boxes_at, dropped_at, explain, labels_at, objects_at
 from pp_tt_video.profile import Profile, using_profile
 from pp_tt_video.video import VideoInfo
-from tests.helpers import RACING, ROLLING, car_box, detections_of, driving, pictures_of, repeat
+from tests.helpers import (RACING, ROLLING, car_box, cone_box, detections_of, driving, objects_of, pictures_of,
+                           repeat)
 
 VIDEO_SECONDS = 300
 
@@ -168,6 +169,53 @@ class BoxesAtTest(unittest.TestCase):
 
     def test_no_pictures_at_all(self):
         self.assertIsNone(boxes_at(explain(detections_of([]), [], 10.0), 1.0))
+
+
+def cones_at(time, lying_too=True):
+    """Objects with, at one time, a standing cone and (if asked) a lying one."""
+    boxes = [cone_box(300, 15, 30, 0.6)]
+    if lying_too:
+        boxes.append(cone_box(700, 30, 15, 0.4))
+    return objects_of([(time, boxes)])
+
+
+class ObjectsTest(unittest.TestCase):
+    def test_objects_are_shown_with_the_rules_choice(self):
+        explanation = explain(detections_of([]), [], 20.0, cones_at(10.0))
+        shown = objects_at(explanation, 10.1)
+        self.assertEqual([(box.width, lying) for box, lying in shown], [(15, False), (30, True)])
+
+    def test_no_objects_when_the_last_search_is_too_old(self):
+        # At 5 pictures per second a search is shown for a fifth of a second.
+        explanation = explain(detections_of([]), [], 20.0, cones_at(10.0))
+        self.assertEqual(objects_at(explanation, 10.3), [])
+        self.assertEqual(objects_at(explanation, 9.9), [])
+
+    def test_without_objects_there_is_nothing_to_show(self):
+        explanation = explain(detections_of([]), [], 20.0)
+        self.assertEqual(objects_at(explanation, 10.0), [])
+
+    def test_obstacle_at_pace_is_kept(self):
+        explanation = explain(detections_of([]), hard_driving(), VIDEO_SECONDS, cones_at(150.0))
+        self.assertEqual([stretch.label for stretch in explanation.kept_stretches], ["obstacle"])
+        self.assertEqual(labels_at(explanation, 151.0), ("obstacle",))
+
+    def test_obstacle_outside_pace_is_dropped_with_reason(self):
+        explanation = explain(detections_of([]), gentle_driving(), VIDEO_SECONDS, cones_at(150.0))
+        (dropped,) = explanation.dropped_stretches
+        self.assertEqual(dropped.stretch.label, "obstacle")
+        self.assertEqual(dropped.reason, "outside the part at pace")
+
+    def test_timeline_equals_the_normal_detection(self):
+        detections = detections_of(overtaken_car())
+        objects = cones_at(150.0)
+        info = VideoInfo(width=5312, height=2988, frames_per_second=29.97,
+                         duration_seconds=VIDEO_SECONDS, codec="hevc")
+        sensor_seconds = hard_driving()
+        with mock.patch("pp_tt_video.detect_events.read_video_info", lambda video: info), \
+             mock.patch("pp_tt_video.detect_events.read_sensors", lambda video: sensor_seconds):
+            normal = timeline_from_detections("x.mp4", detections, objects)
+        self.assertEqual(explain(detections, sensor_seconds, VIDEO_SECONDS, objects).timeline, normal)
 
 
 if __name__ == "__main__":

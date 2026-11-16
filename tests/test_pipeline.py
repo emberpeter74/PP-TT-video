@@ -344,6 +344,13 @@ class DetectionsInPipelineTest(unittest.TestCase):
         self.assertEqual(explanation.duration_seconds, 3.0)
         self.assertEqual(self.detection_runs, 1)   # one pass for events and check video
 
+    def test_check_video_is_given_the_objects(self):
+        from pp_tt_video.explain import objects_at
+        self.run_module("check", check_video=True)
+        _, _, explanation = self.drawn[0]
+        # small_objects has a standing cone in every picture.
+        self.assertEqual([lying for _, lying in objects_at(explanation, 0.0)], [False])
+
     def test_check_video_is_skipped_when_it_exists(self):
         self.run_module("check", check_video=True)
         self.run_module("check", check_video=True)

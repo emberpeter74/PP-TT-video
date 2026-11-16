@@ -1,6 +1,6 @@
 # Step 9: `obstacle` (knocked-over cones) and a place for later kinds of event
 
-Status: approved by the author on 2026-11-16. Nothing is built yet. The count of O0 was done on the three examples only (16 reports, 15 real, 1 false; see the technical spec); the author then decided to build the recognition as it is and to improve it in a later phase, so the five videos in `input video files/` were not counted. The plan is in `docs/superpowers/plans/2026-11-16-obstacle.md`.
+Status: approved by the author on 2026-11-16, **built** on the same day in tasks O0 to O4. Deviations from this design: the picture rate is 5 per second, not 2 (fixed by the count); the "row of cones" test only counts a clearly smaller inner box (less than half the width), so a second box around the same cone does not hide it; the model is loaded only when pictures are really searched; the run reports the cone search as its own progress line. The count of O0 was done on the three examples only (16 reports, 15 real, 1 false; see the technical spec); the author then decided to build the recognition as it is and to improve it in a later phase, so the five videos in `input video files/` were not counted. The plan is in `docs/superpowers/plans/2026-11-16-obstacle.md`.
 
 ## 1. What the author wants, and why
 

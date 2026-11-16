@@ -15,7 +15,7 @@ from pp_tt_video.detect_cars import CarBox
 from pp_tt_video.draw import draw_picture, full_picture_size, picture_size
 from pp_tt_video.explain import explain
 from pp_tt_video.profile import Profile, using_profile
-from tests.helpers import car_box, detections_of, pictures_of
+from tests.helpers import car_box, cone_box, detections_of, objects_of, pictures_of
 from tests.test_explain import VIDEO_SECONDS, gentle_driving, hard_driving, overtaken_car
 
 BLACK = (0, 0, 0)
@@ -112,6 +112,41 @@ class DrawPictureTest(unittest.TestCase):
     def test_video_without_any_car_does_not_fail(self):
         empty = explain(detections_of([(0.0, [])]), [], 10.0)
         self.assertEqual(self.draw(explanation=empty).getpixel(EDGE), BLACK)
+
+
+MAGENTA = (255, 0, 255)
+
+
+class ObjectBoxesTest(unittest.TestCase):
+    """Cones: a thin box for every cone, a thick magenta one for a lying cone."""
+
+    LYING = cone_box(700, 60, 30, 0.4, centre_y=400)      # left edge at x = 670
+    STANDING = cone_box(300, 20, 40, 0.6, centre_y=400)   # left edge at x = 290
+
+    def setUp(self):
+        objects = objects_of([(0.0, [self.STANDING, self.LYING])])
+        self.explanation = explain(detections_of([(0.0, [])]), [], 10.0, objects)
+
+    def draw(self, explanation=None):
+        return draw_picture(black_picture(), 0.0, explanation or self.explanation, "built-in values")
+
+    def test_lying_cone_is_drawn_in_magenta(self):
+        self.assertEqual(self.draw().getpixel((670, 400)), MAGENTA)
+
+    def test_standing_cone_gets_a_thin_box_in_another_colour(self):
+        colour = self.draw().getpixel((290, 400))
+        self.assertNotEqual(colour, BLACK)
+        self.assertNotEqual(colour, MAGENTA)
+
+    def test_object_boxes_can_be_switched_off(self):
+        with setting("SHOW_OBJECT_BOXES", False):
+            drawn = self.draw()
+        self.assertEqual(drawn.getpixel((670, 400)), BLACK)
+        self.assertEqual(drawn.getpixel((290, 400)), BLACK)
+
+    def test_explanation_without_objects_draws_as_before(self):
+        without = explain(detections_of([(0.0, [])]), [], 10.0)
+        self.assertEqual(self.draw(without).getpixel((670, 400)), BLACK)
 
 
 class StripTest(unittest.TestCase):

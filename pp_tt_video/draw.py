@@ -1,7 +1,8 @@
 """Draws one picture of the check video.
 
 Takes a picture of the video and draws over it what the module made of
-that moment: the car boxes, the events, the profile in use and the time.
+that moment: the car boxes, the cones, the events, the profile in use and
+the time.
 What is drawn is chosen in check_video_settings.py.
 
 The drawing is done with Pillow, a library for working with pictures. It
@@ -16,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 from pp_tt_video import check_video_settings
 from pp_tt_video.charts import window
 from pp_tt_video.events import format_time
-from pp_tt_video.explain import boxes_at, dropped_at, labels_at
+from pp_tt_video.explain import boxes_at, dropped_at, labels_at, objects_at
 
 # Colours are (red, green, blue), each from 0 to 255.
 STATE_COLOURS = {
@@ -27,6 +28,8 @@ STATE_COLOURS = {
 TEXT_COLOUR = (255, 255, 255)
 TEXT_BACKGROUND = (0, 0, 0)
 DROPPED_COLOUR = (170, 170, 170)   # grey: what was thrown away
+OBJECT_COLOUR = (90, 220, 90)      # green: a cone the model found
+OBSTACLE_COLOUR = (255, 0, 255)    # magenta: a cone the rule took for knocked over
 
 # The sensor strip.
 STRIP_BACKGROUND = (18, 18, 22)
@@ -121,6 +124,25 @@ def draw_dropped_boxes(draw, boxes, picture_width):
             # does not cover the label of a kept box that stands on top.
             write_text(draw, (box.left + 4, box.top + 4), details, scaled(BOX_TEXT_SIZE, picture_width),
                        anchor="la", colour=DROPPED_COLOUR)
+
+
+def draw_object_boxes(draw, shown_objects, picture_width):
+    """Draw the cones: thin and green as found, thick and magenta where the rule sees an obstacle.
+
+    shown_objects: a list of (ObjectBox, is_obstacle), see explain.objects_at.
+    """
+    line_width = scaled(BOX_LINE_WIDTH, picture_width)
+    # The obstacles last, so they lie on top of a second box around the same cone.
+    for box, is_obstacle in sorted(shown_objects, key=lambda pair: pair[1]):
+        corners = (box.left, box.top, box.right, box.bottom)
+        if not is_obstacle:
+            draw.rectangle(corners, outline=OBJECT_COLOUR, width=1)
+            continue
+        draw.rectangle(corners, outline=OBSTACLE_COLOUR, width=line_width)
+        if check_video_settings.SHOW_BOX_DETAILS:
+            # "ld": the text stands on the top edge of the box.
+            write_text(draw, (box.left, box.top - 4), f"obstacle  {box.confidence:.2f}",
+                       scaled(BOX_TEXT_SIZE, picture_width), anchor="ld", colour=OBSTACLE_COLOUR)
 
 
 def dashed_line(draw, left, right, y, colour):
@@ -223,6 +245,9 @@ def draw_picture(image, time_seconds, explanation, profile_name):
     # The thrown-away boxes go first, so the kept ones are drawn over them.
     if boxes and check_video_settings.SHOW_DROPPED_BOXES:
         draw_dropped_boxes(draw, boxes, width)
+    # The cones go between the thrown-away car boxes and the kept ones.
+    if check_video_settings.SHOW_OBJECT_BOXES:
+        draw_object_boxes(draw, objects_at(explanation, time_seconds), width)
     if boxes and check_video_settings.SHOW_KEPT_BOXES:
         draw_kept_boxes(draw, boxes, width)
 

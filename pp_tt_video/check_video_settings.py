@@ -52,6 +52,14 @@ SHOW_BOX_DETAILS = True
 # why an event was missed.
 SHOW_DROPPED_BOXES = True
 
+# True: the cones the object model found are drawn too:
+#   thin green box                        a cone the model found
+#   thick magenta box, "obstacle 0.42"    a cone the rule took for knocked over,
+#                                         with how sure the model is (0 to 1)
+# Only the pictures that were searched have cones (5 per second), so a box
+# shows for a fifth of a second and then moves on.
+SHOW_OBJECT_BOXES = True
+
 # --- The events -------------------------------------------------------------------
 
 # True: the labels that apply at this moment are written across the top,

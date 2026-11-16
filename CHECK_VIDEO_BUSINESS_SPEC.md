@@ -36,6 +36,7 @@ Decided by the author:
   - how tall the car appears, as a part of the picture height: this is the value the car rules decide on.
 - The box colour shows how the car rules see the car at that moment: far, close (counts towards `held up`), or passing (counts towards `overtaking` or `overtaken`).
 - **Boxes the module threw away**, drawn differently (thin, grey), with the reason: too wide (the own cockpit), a double box around the same car, or a car the model was never sure enough of. **(Assumption: shown by default, because "what was thrown away" is exactly what the author needs to see; can be switched off.)**
+- **Cones** (added in step 9): every cone the object model found gets a thin green box; a cone the rule took for knocked over gets a thick magenta box with "obstacle" and how sure the model is. Can be switched off (`SHOW_OBJECT_BOXES`). So the author can see why an `obstacle` was reported, and which cones were seen but not counted.
 - Boxes exist for 5 pictures per second, the video has 30. At first a box stays where it is until the next one is known. If that looks too jumpy, the box can be moved smoothly between the two (a setting). **(Decided by the author: look first, smooth if needed.)**
 
 ### 3.2 The events
@@ -122,7 +123,7 @@ For a video `name.MP4`, with the option:
 | `name-overview.png` | The overview picture |
 | `name-detections.json` | The cars found in every analysed picture, kept so the check video can be drawn again without the slow detection |
 
-Without the option, only `name-sensors.csv` is new (section 5).
+Without the option, only `name-sensors.csv` is new (section 5). Since step 9, `name-objects.json` (the cones found) is written on every run, with or without the option; the check video uses it too.
 
 All are written to the same folder as the other output files and skipped when they exist, unless `--overwrite` is given.
 

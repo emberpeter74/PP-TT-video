@@ -240,6 +240,7 @@ class EventsMaker:
             if not video_wanted and not overview_wanted:
                 return True, "; ".join(messages)
             detections = self.detections_for(video, output_folder, overwrite, on_progress, keep_file=True)
+            objects = self.objects_for(video, output_folder, overwrite)
             duration_seconds = read_video_info(video).duration_seconds
             try:
                 sensor_seconds = read_sensors(video)
@@ -248,7 +249,7 @@ class EventsMaker:
             # Inside this block the rules, and so everything that is drawn,
             # use the profile's values.
             with using_profile(profile):
-                explanation = explain(detections, sensor_seconds, duration_seconds)
+                explanation = explain(detections, sensor_seconds, duration_seconds, objects)
                 # The overview first: it takes a moment, the video minutes.
                 if overview_wanted:
                     overview.write_overview(overview_path, explanation, profile.name, Path(video).name)

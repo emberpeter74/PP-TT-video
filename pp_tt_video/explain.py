@@ -12,7 +12,7 @@ the values of the profile that is in force.
 """
 
 from bisect import bisect_right
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pp_tt_video import settings
 from pp_tt_video.car_events import events_of_tracks, smooth
@@ -20,6 +20,7 @@ from pp_tt_video.charts import CHARTS
 from pp_tt_video.detect_cars import keep_car_boxes
 from pp_tt_video.detect_events import combine_stretches, sensor_stretches
 from pp_tt_video.event_types import load_event_types
+from pp_tt_video.object_events import events_of_objects, is_lying_cone
 from pp_tt_video.pace import outside_pace
 from pp_tt_video.timeline import build_timeline
 from pp_tt_video.tracking import Tracker, drop_double_boxes
@@ -76,6 +77,12 @@ class Explanation:
     duration_seconds: float
     sensor_seconds: list      # the motion sensor data; empty if the video has none
     charts: dict              # name -> Chart for the sensor strip; empty without sensor data
+    # The objects found (cones): one (time, [(ObjectBox, is_obstacle), ...])
+    # per searched picture. is_obstacle is True for a box the rule took for
+    # a knocked-over cone. All empty when the video has no objects file.
+    object_pictures: list = field(default_factory=list)
+    object_times: list = field(default_factory=list)   # the time of each, for looking one up quickly
+    object_frames_per_second: float = 0                # how many pictures per second were searched
 
 
 def state_of(height_part):
@@ -92,11 +99,12 @@ def is_in(box, boxes):
     return any(box is other for other in boxes)
 
 
-def explain(detections, sensor_seconds, duration_seconds):
+def explain(detections, sensor_seconds, duration_seconds, objects=None):
     """Run the rules on the detections and sensor data of a video and return
     the Explanation.
 
     sensor_seconds: the motion sensor data, or an empty list.
+    objects:        the objects found in the video (cones), or None.
     """
     picture_height = detections.picture_height
 
@@ -146,8 +154,15 @@ def explain(detections, sensor_seconds, duration_seconds):
         session_parts, sensor_events = sensor_stretches(sensor_seconds, duration_seconds)
     else:
         session_parts, sensor_events = [], []
-    events = car_stretches + sensor_events
+    events = car_stretches + sensor_events + events_of_objects(objects)
     stretches = combine_stretches(events, session_parts)
+
+    # --- The objects, with what the rule made of each ---------------------------
+    object_pictures = []
+    if objects is not None:
+        for time_seconds, boxes in objects.pictures:
+            shown = [(box, is_lying_cone(box, boxes, objects.analysis_width)) for box in boxes]
+            object_pictures.append((time_seconds, shown))
     dropped_stretches = [
         DroppedStretch(stretch, OUTSIDE_PACE)
         for stretch in sorted(events, key=lambda stretch: stretch.start)
@@ -170,6 +185,9 @@ def explain(detections, sensor_seconds, duration_seconds):
         # Made here, while the profile is in force: the charts take the
         # rules' thresholds from the settings at this moment.
         charts={name: make_chart(sensor_seconds) for name, make_chart in CHARTS.items()} if sensor_seconds else {},
+        object_pictures=object_pictures,
+        object_times=[time_seconds for time_seconds, _ in object_pictures],
+        object_frames_per_second=objects.frames_per_second if objects is not None else 0,
     )
 
 
@@ -188,6 +206,23 @@ def boxes_at(explanation, time_seconds):
     if time_seconds - picture.time_seconds >= 1 / explanation.frames_per_second:
         return None
     return picture
+
+
+def objects_at(explanation, time_seconds):
+    """Return the objects to show at a moment of the video: a list of (ObjectBox, is_obstacle).
+
+    Like boxes_at: a moment between two searched pictures shows the objects
+    of the last searched picture before it, as long as that one is no older
+    than the time between two searched pictures. Otherwise, and in a video
+    without objects, the list is empty.
+    """
+    position = bisect_right(explanation.object_times, time_seconds) - 1
+    if position < 0:
+        return []
+    time, shown = explanation.object_pictures[position]
+    if time_seconds - time >= 1 / explanation.object_frames_per_second:
+        return []
+    return shown
 
 
 def labels_at(explanation, time_seconds):

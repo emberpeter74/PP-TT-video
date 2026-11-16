@@ -1,6 +1,6 @@
 # GoPro trackday event extractor
 
-Status: work in progress. GPS extraction works. Detected so far, from the camera's motion sensors: the time before and after the session, warm up, cooling, sliding, leaving the track and a breakdown; from the picture: the events involving other cars (overtaking, overtaken, held up). Obstacles are not detected yet.
+Status: work in progress. GPS extraction works. Detected so far, from the camera's motion sensors: the time before and after the session, warm up, cooling, sliding, leaving the track and a breakdown; from the picture: the events involving other cars (overtaking, overtaken, held up) and knocked-over cones on the track (obstacle). Other obstacles, such as car parts or a stopped car, are not detected yet.
 
 ## Goal
 

@@ -97,7 +97,7 @@ The footage is divided into consecutive states. Normally one label applies at a 
 - Adding, renaming or removing an event type means changing the list, not the module.
 - For now the list is a **CSV file**, read at every run, so the user can add types freely. In the future it will be read from a database; the rest of the module must not care where the list comes from.
 - A label alone does not tell the module what to look for. **Each entry holds two things: the label and a plain-language description** of what the event looks like (agreed).
-- The module uses the description to recognise the event where that works. Types that cannot be recognised that way get a dedicated detection routine or labelled example clips. How well the description route works is unproven and must be tested on the examples.
+- The module uses the description to recognise the event where that works. Types that cannot be recognised that way get a dedicated detection routine or labelled example clips. How well the description route works was tested on the examples in step 9 (see below).
 - Adding a type should normally mean adding one line (label and description) to the list.
 - Until a new type can be recognised, such moments are left as `clear` (changed on 2026-11-16, see section 5; the earlier idea was to write them as `other event`).
 - The description route was tried in step 9: a picture model that is told in words what to look for finds cones well ("a traffic cone"), but "a person" or "a car part" also found the driver and the cockpit. So for now words are used to find an object, and a rule decides what it means.
@@ -290,7 +290,7 @@ Decided by the user: the motion sensor data is written to its own file, separate
 ## 7. Quality expectations
 
 - How the result is used: the larger program evaluates driving per curve or curve combination and only takes the `clear` ones into consideration. The events file decides which curves are excluded.
-- **A false alarm is worse than a missed event** (stated by the user). The module should report an event only when it is reasonably sure, and leave doubtful moments as `clear`. This applies to every event type, including `other event`: unusual moments are flagged only when clearly unusual.
+- **A false alarm is worse than a missed event** (stated by the user). The module should report an event only when it is reasonably sure, and leave doubtful moments as `clear`. This applies to every event type, also to the new kinds added later (section 5).
 - Known consequence: a missed event lets a disturbed curve into the evaluation as if it were clear.
 - The reference is a person watching the video and marking the events by hand; the example events file was made this way. Times are the time elapsed since the beginning of the video.
 - **Tolerance:** a detected time may differ from the hand-marked time by up to 5 seconds. This is enough because results are used per curve, not per second.

@@ -600,7 +600,7 @@ Both offtracks in 09-41 lie in the part at pace and are kept (`cooling` starts a
 
 **Profiles.** `OFFTRACK_MIN_SHAKE` stays a value a profile may set. A profile written before the rework shows the old built-in value 7.0 in a comment line (it is not in force, the line is commented out). A profile that sets the value by hand to something on the old scale would now find nothing: such a profile must be made again.
 
-### Step 9: obstacle (built in O1 and O2; the check video follows in O3)
+### Step 9: obstacle (done)
 
 Design and plan: `docs/superpowers/specs/2026-11-16-obstacle-design.md` and `docs/superpowers/plans/2026-11-16-obstacle.md`.
 
@@ -702,10 +702,12 @@ Because it is public, anyone can read everything in it. Consequences:
    - Added before step 9 at the user's wish, because the rules fail on other footage:
      - **P1.** (done) Profiles: reading a profile file, choosing it (`--profile`, folder file, built-in values), applying it per video.
      - **P2.** (done) The `make_profile` command, with the user's reference levels measured from the three examples.
-     - **V1 to V7.** The check video, see `CHECK_VIDEO_TECHNICAL_SPEC.md`.
+     - **V1 to V7.** The check video, see `CHECK_VIDEO_TECHNICAL_SPEC.md`. **V1 to V6 are done;** V7 was skipped by the user.
      - Profiles came first: they are small, and on the son's four videos they showed at once that a part at pace is found. **P1 and P2 are done.**
-     - After the check video: rework the offtrack rule, which gave false alarms on the son's footage (see "Rework of the offtrack rule"). Decided by the user. **Done** (the rule; the check video's chart follows).
-9. `obstacle`, `other event`, and the description experiment. Planned as tasks O0 to O4 (see "Step 9: obstacle"). **O0, the count on the examples, is done.**
+     - After the check video: rework the offtrack rule, which gave false alarms on the son's footage (see "Rework of the offtrack rule"). Decided by the user. **Done** (the rule and the check video's chart).
+9. `obstacle`, `other event`, and the description experiment. **Done** in tasks O0 to O4 (see "Step 9: obstacle"): knocked-over cones are reported as `obstacle`; `other event` is a place for later kinds, not a detector; the description route is used to find cones.
+
+All steps of this list are done. What is left is judging results on more footage and the weak spots noted in the sections above; the user decides how far to take that. Ideas that are not part of this list are in section 14.
 
 Each step ends with something that can be run and checked, so the user can follow and learn step by step.
 
@@ -721,6 +723,20 @@ Idea from the user: in a later phase, read the RaceBox Mini recording of the sam
 - It would give reliable speed and position for the whole video. That helps `warm up` and `cooling` directly, and `sliding` and `offtrack` through the comparison of speed, turning and cornering force.
 - It changes the module's boundary. The business specification currently says that synchronising with RaceBox Mini data belongs to other modules. If this idea is taken up, that boundary must be decided again there first.
 - Until then the detectors are built to work from the GoPro file alone, so RaceBox data can later be added as an extra signal without redesigning them.
+
+### Better obstacle recognition
+
+Decided by the user (2026-11-16): the cone recognition is built as good as it was after the count, and improved in a later phase. Collected from step 9:
+
+- A far row of standing cones is sometimes taken for one lying cone (10-32 at 05:13).
+- Upright cones in the way, car parts, people and stopped cars are not found. "A person" and "a car part" also found the driver and the cockpit; the inside of the car would have to be masked out first.
+- Whether a cone lies on the track or beside it is not judged. Tarmac around the cone and comparing laps were tried and did not work.
+- The search takes about 1.25 times the video's length at 5 pictures per second. Half of the lying cones are seen in one picture only, so a lower rate misses them.
+- The son's footage (another camera view) and blue cones are untested.
+
+### Pace rule on a beginner's driving
+
+GX010182 and GX010183 are called "at pace" from the start, although the first minutes are slow (judged by the user, see "Driver and car profiles"). The profile's lower pace threshold lets practising the lines count as pace. Both videos are test cases for a later look.
 
 ## 15. Open technical questions
 

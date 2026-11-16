@@ -76,6 +76,10 @@ Changes to existing files, kept as small as possible:
 | Thrown away, "too wide" | boxes removed by `keep_car_boxes` (`MAX_CAR_WIDTH_FRACTION`) |
 | Thrown away, "double" | boxes removed by `drop_double_boxes` |
 | Thrown away, "never sure enough" | tracks with `best_confidence` below `CAR_MIN_CONFIDENCE` |
+| Cone, thin green (step 9) | every box of `name-objects.json` |
+| Cone, thick magenta, "obstacle" and score (step 9) | boxes for which `object_events.is_lying_cone` is true |
+
+The cones come from `explain.objects_at`: the last searched picture before the moment, if no older than one picture interval (a fifth of a second). They are drawn between the thrown-away car boxes and the kept ones; within the cones, the obstacles last. `explain(detections, sensor_seconds, duration_seconds, objects=None)` also adds the object events to the others, so `obstacle` is in the event line, in the dropped events and in the overview like every event.
 
 Boxes are in the coordinates of the analysed pictures (1280 wide), which is also the size of the check video, so no conversion is needed.
 
