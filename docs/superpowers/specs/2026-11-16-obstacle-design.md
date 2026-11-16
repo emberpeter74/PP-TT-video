@@ -1,6 +1,6 @@
 # Step 9: `obstacle` (knocked-over cones) and a place for later kinds of event
 
-Status: approved by the author on 2026-11-16. Nothing is built yet. The plan is in `docs/superpowers/plans/2026-11-16-obstacle.md`.
+Status: approved by the author on 2026-11-16. Nothing is built yet. The count of O0 was done on the three examples only (16 reports, 15 real, 1 false; see the technical spec); the author then decided to build the recognition as it is and to improve it in a later phase, so the five videos in `input video files/` were not counted. The plan is in `docs/superpowers/plans/2026-11-16-obstacle.md`.
 
 ## 1. What the author wants, and why
 
@@ -98,9 +98,9 @@ A newly named event (business spec, section 5) is therefore: a line in `event_ty
 
 ### 5.3 The object search
 
-- Runs on the same reduced pictures as the car search (1280 wide), but at its own rate: `OBJECT_FRAMES_PER_SECOND`. First value **2** (assistant's call from the trial; to be confirmed by the count in step O1).
+- Runs on the same reduced pictures as the car search (1280 wide), but at its own rate: `OBJECT_FRAMES_PER_SECOND`. Value **5**, fixed by the count of O0: half of the lying cones are seen in one picture only, and at 2.5 per second a third or more would be missed. (The first proposal was 2.)
 - Saves every box the model gives from score `OBJECT_MIN_CONFIDENCE` (first value 0.15), so the rule's cut-offs can be tuned later without a new search.
-- Cost: about 0.27 s per picture plus a second reading of the video, so roughly 0.7 of the video's length is added to the first run at 2 pictures per second (to be measured in the count). Later runs read the saved file.
+- Cost: about 0.27 s per picture plus a second reading of the video, so about 1.25 times the video's length is added to the first run at 5 pictures per second (measured in O0). Later runs read the saved file.
 - The model's files (several hundred MB) are downloaded once, on first use, as the car model's were.
 - A video whose objects file is missing or does not fit the settings gets a new search. A run with `--gps-only` does none.
 

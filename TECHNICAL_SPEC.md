@@ -593,6 +593,34 @@ Both offtracks in 09-41 lie in the part at pace and are kept (`cooling` starts a
 
 **Profiles.** `OFFTRACK_MIN_SHAKE` stays a value a profile may set. A profile written before the rework shows the old built-in value 7.0 in a comment line (it is not in force, the line is commented out). A profile that sets the value by hand to something on the old scale would now find nothing: such a profile must be made again.
 
+### Step 9: obstacle (count done, not built yet)
+
+Design and plan: `docs/superpowers/specs/2026-11-16-obstacle-design.md` and `docs/superpowers/plans/2026-11-16-obstacle.md`.
+
+**Method.** A ready-made model that takes words (OWLv2 from the `transformers` library, given "a traffic cone") finds cones in the reduced pictures. A cone whose box is clearly wider than tall lies on its side: that is the obstacle. Comparing laps and looking for tarmac around the cone were tried and dropped (see the design).
+
+**Count before any module code (task O0).** Cone boxes saved with throwaway scripts from the module's own reduced pictures, 5 per second. Rule: score from 0.30, at least 1.5 times as wide as tall, at least 10 of 1280 pixels wide, no clearly smaller cone inside the box; sightings up to 3 seconds apart are one moment.
+
+| Video | Reports | Real lying cones | False | Note |
+|---|---|---|---|---|
+| 12-17 | 9 | 9 | 0 | the three obstacles of the hand-made file (02:09, 02:27, 02:42) and the same cones on later laps |
+| 09-41 | 6 | 6 | 0 | none is in the hand-made file; five are probably one cone at the grass edge, lap after lap |
+| 10-32 | 1 | 0 | 1 | 05:13: a far row of dark cones boxed as one wide object |
+
+"Real" is the assistant's reading of cut-outs. The five videos in `input video files/` were not counted (the user's decision, see below).
+
+What the count showed:
+
+- **5 pictures per second are needed.** 8 of the 16 moments are seen in one picture only. Thinned to 2.5 per second, 6 of 9 (12-17) and 2 of 6 (09-41) are sure to be caught.
+- **"Seen in at least two pictures" cannot be used:** it would remove the marked obstacle at 02:27.
+- **The score does not separate the false report from the real ones:** the false one scores 0.33; a cut-off of 0.35 would remove four real cones in 09-41.
+- **Cost:** 0.25 s per picture, so the search takes about 1.25 times the video's length at 5 pictures per second (measured: 487 s, 782 s and 1,000 s for the three examples). Batches of 4 are barely faster than single pictures. Graphics card memory: 1.3 GB peak with batches of 4.
+- The scores shift a little with the way the picture is reduced: against a trial on JPEG stills, one real moment was lost, one gained, and one false report disappeared.
+
+**Decided by the user (2026-11-16):** the cone recognition is built as good as it is now. Making it better (the false report on a far row, upright cones in the way, other objects, whether the cone is in the intended path, speed) belongs to a later phase.
+
+**Values fixed by the count:** `OBJECT_FRAMES_PER_SECOND = 5`; all others as in the design.
+
 ## 9. Event type list
 
 - A CSV file with two columns: `label` and `description`.
@@ -655,7 +683,7 @@ Because it is public, anyone can read everything in it. Consequences:
      - **V1 to V7.** The check video, see `CHECK_VIDEO_TECHNICAL_SPEC.md`.
      - Profiles came first: they are small, and on the son's four videos they showed at once that a part at pace is found. **P1 and P2 are done.**
      - After the check video: rework the offtrack rule, which gave false alarms on the son's footage (see "Rework of the offtrack rule"). Decided by the user. **Done** (the rule; the check video's chart follows).
-9. `obstacle`, `other event`, and the description experiment.
+9. `obstacle`, `other event`, and the description experiment. Planned as tasks O0 to O4 (see "Step 9: obstacle"). **O0, the count on the examples, is done.**
 
 Each step ends with something that can be run and checked, so the user can follow and learn step by step.
 
